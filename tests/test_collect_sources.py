@@ -4,12 +4,10 @@ import json
 from bs4 import BeautifulSoup
 
 from opportunity_intelligence.discovery.source_registry import Source
-from opportunity_intelligence.discovery import collect_sources as collector
+import opportunity_intelligence.discovery.collect_sources as collector
 
 
 def create_test_source() -> Source:
-    """Create a sample source for testing."""
-
     return Source(
         id="test_source",
         name="Test University",
@@ -21,15 +19,36 @@ def create_test_source() -> Source:
     )
 
 
-def test_collect_source_success(monkeypatch):
-    """Test successful webpage collection."""
+def test_extract_links():
+    html = """
+    <html>
+        <body>
+            <a href="/research">Research Opportunities</a>
+            <a href="https://example.com/jobs">Student Jobs</a>
+            <a href="mailto:test@example.com">Email</a>
+            <a href="/research">Duplicate Link</a>
+        </body>
+    </html>
+    """
 
+    soup = BeautifulSoup(html, "html.parser")
+
+    links = collector.extract_links(soup, "https://example.com")
+
+    assert len(links) == 2
+    assert links[0]["text"] == "Research Opportunities"
+    assert links[0]["url"] == "https://example.com/research"
+    assert links[1]["url"] == "https://example.com/jobs"
+
+
+def test_collect_source_success(monkeypatch):
     html = """
     <html>
         <head><title>Test University</title></head>
         <body>
             <h1>Research Opportunities</h1>
             <p>Summer research positions available.</p>
+            <a href="/research">Research Programs</a>
         </body>
     </html>
     """
@@ -45,26 +64,21 @@ def test_collect_source_success(monkeypatch):
     assert result["status"] == "success"
     assert result["page_title"] == "Test University"
     assert "Summer research positions available." in result["page_text"]
+    assert len(result["links"]) == 1
+    assert result["links"][0]["url"] == "https://example.com/research"
 
 
 def test_collect_source_failure(monkeypatch):
-    """Test handling of an unsuccessful webpage request."""
-
-    monkeypatch.setattr(
-        collector,
-        "fetch_page",
-        lambda url: None
-    )
+    monkeypatch.setattr(collector, "fetch_page", lambda url: None)
 
     result = collector.collect_source(create_test_source())
 
     assert result["status"] == "failed"
     assert result["page_text"] is None
+    assert result["links"] == []
 
 
 def test_save_record(tmp_path):
-    """Test saving a collected source as JSON."""
-
     record = {
         "source_id": "test_source",
         "status": "success",
@@ -84,8 +98,6 @@ def test_save_record(tmp_path):
 
 
 def test_collect_sources(monkeypatch, tmp_path):
-    """Test collecting and saving enabled sources."""
-
     source = create_test_source()
 
     monkeypatch.setattr(
@@ -93,7 +105,8 @@ def test_collect_sources(monkeypatch, tmp_path):
         "collect_source",
         lambda source: {
             "source_id": source.id,
-            "status": "success"
+            "status": "success",
+            "links": []
         }
     )
 
