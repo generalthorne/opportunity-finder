@@ -1,13 +1,20 @@
+from dataclasses import dataclass
 
 import requests
 from bs4 import BeautifulSoup
 
 
-def fetch_page(url: str) -> BeautifulSoup | None:
-    """Retrieve a webpage and return its parsed HTML.
+@dataclass
+class FetchResult:
+    """Represent the result of retrieving a webpage."""
 
-    Return None if the webpage cannot be retrieved.
-    """
+    soup: BeautifulSoup | None
+    status_code: int | None
+    error: str | None
+
+
+def fetch_page(url: str) -> FetchResult:
+    """Retrieve a webpage and report the result."""
 
     headers = {
         "User-Agent": "OpportunityIntelligence/1.0"
@@ -22,8 +29,21 @@ def fetch_page(url: str) -> BeautifulSoup | None:
 
         response.raise_for_status()
 
-        return BeautifulSoup(response.text, "html.parser")
+        return FetchResult(
+            soup=BeautifulSoup(response.text, "html.parser"),
+            status_code=response.status_code,
+            error=None
+        )
 
     except requests.RequestException as error:
-        print(f"Could not retrieve {url}: {error}")
-        return None
+        status_code = (
+            error.response.status_code
+            if error.response is not None
+            else None
+        )
+
+        return FetchResult(
+            soup=None,
+            status_code=status_code,
+            error=str(error)
+        )

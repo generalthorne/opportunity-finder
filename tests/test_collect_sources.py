@@ -1,10 +1,11 @@
-
 import json
 
 from bs4 import BeautifulSoup
 
 from opportunity_intelligence.discovery.source_registry import Source
 import opportunity_intelligence.discovery.collect_sources as collector
+
+from opportunity_intelligence.collectors.web_collector import FetchResult
 
 
 def create_test_source() -> Source:
@@ -53,15 +54,24 @@ def test_collect_source_success(monkeypatch):
     </html>
     """
 
+    def mock_fetch_page(url):
+        return FetchResult(
+            soup=BeautifulSoup(html, "html.parser"),
+            status_code=200,
+            error=None
+        )
+
     monkeypatch.setattr(
         collector,
         "fetch_page",
-        lambda url: BeautifulSoup(html, "html.parser")
+        mock_fetch_page
     )
 
     result = collector.collect_source(create_test_source())
 
     assert result["status"] == "success"
+    assert result["http_status_code"] == 200
+    assert result["error"] is None
     assert result["page_title"] == "Test University"
     assert "Summer research positions available." in result["page_text"]
     assert len(result["links"]) == 1
@@ -69,11 +79,24 @@ def test_collect_source_success(monkeypatch):
 
 
 def test_collect_source_failure(monkeypatch):
-    monkeypatch.setattr(collector, "fetch_page", lambda url: None)
+    def mock_fetch_page(url):
+        return FetchResult(
+            soup=None,
+            status_code=403,
+            error="403 Client Error: Forbidden"
+        )
+
+    monkeypatch.setattr(
+        collector,
+        "fetch_page",
+        mock_fetch_page
+    )
 
     result = collector.collect_source(create_test_source())
 
     assert result["status"] == "failed"
+    assert result["http_status_code"] == 403
+    assert result["error"] == "403 Client Error: Forbidden"
     assert result["page_text"] is None
     assert result["links"] == []
 

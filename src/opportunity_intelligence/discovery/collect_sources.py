@@ -50,10 +50,12 @@ def extract_links(soup: BeautifulSoup, base_url: str) -> list[dict]:
     return links
 
 
-def collect_source(source: Source) -> dict:
-    """Retrieve and extract the contents and links of one source."""
 
-    soup = fetch_page(str(source.url))
+def collect_source(source: Source) -> dict:
+    """Retrieve and extract the readable contents of one source."""
+
+    fetch_result = fetch_page(str(source.url))
+    soup = fetch_result.soup
 
     record = {
         "source_id": source.id,
@@ -63,6 +65,8 @@ def collect_source(source: Source) -> dict:
         "source_type": source.source_type,
         "fetched_at": datetime.now(timezone.utc).isoformat(),
         "status": "failed",
+        "http_status_code": fetch_result.status_code,
+        "error": fetch_result.error,
         "page_title": None,
         "page_text": None,
         "links": []
@@ -70,6 +74,18 @@ def collect_source(source: Source) -> dict:
 
     if soup is None:
         return record
+
+    title = soup.title.get_text(strip=True) if soup.title else None
+    page_text = soup.get_text(separator="\n", strip=True)
+    links = extract_links(soup, str(source.url))
+
+    record["status"] = "success"
+    record["page_title"] = title
+    record["page_text"] = page_text
+    record["links"] = links
+
+    return record
+
 
     title = soup.title.get_text(strip=True) if soup.title else None
     page_text = soup.get_text(separator="\n", strip=True)
