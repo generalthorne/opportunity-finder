@@ -1,0 +1,73 @@
+
+sources:
+  # Canadian university sources
+
+  - id: uoft_research
+    name: University of Toronto Undergraduate Research Explorer
+    url: https://undergraduateresearch.utoronto.ca/undergraduate-research-at-u-of-t/undergraduate-research-explorer/
+    region: Canada
+    source_type: program_directory
+    categories:
+      - research
+      - fellowship
+    enabled: true
+    notes: Directory of undergraduate research programs and funding opportunities.
+
+  - id: uoft_student_jobs
+    name: University of Toronto Student Opportunities
+    url: https://jobs.utoronto.ca/content/Student-Opportunities/?locale=en_US
+    region: Canada
+    source_type: student_opportunities
+    categories:
+      - university_employment
+      - coop
+      - internship
+    enabled: true
+    notes: Student employment, work study, and co-op information.
+
+  - id: uoft_engineering
+    name: University of Toronto Engineering Internships
+    url: https://undergrad.engineering.utoronto.ca/internships-jobs-careers/
+    region: Canada
+    source_type: career_information
+    categories:
+      - internship
+      - coop
+    enabled: true
+    notes: Engineering internship and co-op information.
+
+  # United States research sources
+
+  - id: nsf_reu
+    name: National Science Foundation REU
+    url: https://www.nsf.gov/funding/initiatives/reu/students
+    region: United States
+    source_type: research_directory
+    categories:
+      - research
+      - fellowship
+    enabled: true
+    notes: Undergraduate research opportunities and REU site directory.
+
+  - id: mit_urop
+    name: MIT Undergraduate Research Opportunities
+    url: https://urop.mit.edu/students/
+    region: United States
+    source_type: research_program
+    categories:
+      - research
+    enabled: true
+    notes: MIT undergraduate research programs. Eligibility is institution-specific.
+
+  # United States employment sources
+
+  - id: usajobs_students
+    name: USAJOBS Student Opportunities
+    url: https://www.usajobs.gov/hiringpath/students
+    region: United States
+    source_type: government_job_portal
+    categories:
+      - internship
+      - government
+    enabled: true
+    notes: Federal student internships and early-career opportunities.
