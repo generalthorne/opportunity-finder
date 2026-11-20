@@ -10,14 +10,12 @@ from opportunity_intelligence.models import (
 
 
 class OpportunityExtractionResult(BaseModel):
-    """Represent the result of extracting information from a webpage."""
+    """Represent one opportunity extracted from a webpage."""
 
     model_config = ConfigDict(
         extra="forbid",
         json_schema_extra={
             "required": [
-                "is_opportunity",
-                "confidence",
                 "title",
                 "organization",
                 "category",
@@ -34,14 +32,10 @@ class OpportunityExtractionResult(BaseModel):
                 "deadline",
                 "eligibility",
                 "application_url",
-                "evidence",
-                "reasoning"
+                "evidence"
             ]
         }
     )
-
-    is_opportunity: bool
-    confidence: float = Field(ge=0.0, le=1.0)
 
     title: str | None = None
     organization: str | None = None
@@ -68,4 +62,18 @@ class OpportunityExtractionResult(BaseModel):
     application_url: HttpUrl | None = None
 
     evidence: list[str] = Field(default_factory=list)
+
+
+class PageExtractionResult(BaseModel):
+    """Represent all opportunities extracted from one webpage."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    is_opportunity_page: bool
+    confidence: float = Field(ge=0.0, le=1.0)
+
+    opportunities: list[OpportunityExtractionResult] = Field(
+        default_factory=list
+    )
+
     reasoning: str | None = None

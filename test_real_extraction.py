@@ -5,34 +5,40 @@ from opportunity_intelligence.extraction.llm_extractor import (
 
 
 page_text = """
-The University of Example maintains a directory of undergraduate
-research opportunities.
+The University of Example offers the Summer Undergraduate Research Program
+for undergraduate students interested in gaining research experience.
 
-Available opportunities include:
+The program runs for 12 weeks during the summer. Participants work under
+the supervision of university faculty members and contribute to ongoing
+research projects.
 
-1. Machine Learning Research Assistant
-   Department: Computer Science
-   Students work on machine learning projects with faculty members.
+Research areas available through the program include:
 
-2. Biomedical Research Summer Program
-   Department: Biology
-   Students participate in supervised biomedical research.
+1. Computer Science
+   Students may work on artificial intelligence, machine learning,
+   and software systems research.
 
-3. Environmental Research Internship
-   Department: Environmental Science
-   Students assist with ongoing environmental research projects.
+2. Biology
+   Students may participate in biomedical and molecular biology research.
 
-Students should review individual opportunity pages for
-application requirements, deadlines, and additional details.
+3. Environmental Science
+   Students may contribute to environmental monitoring and sustainability
+   research projects.
+
+Applicants must be currently enrolled undergraduate students.
+
+Students apply to the Summer Undergraduate Research Program through
+a single application. Research placements are assigned based on
+student interests and faculty availability.
 """
 
 
 result = extract_page_with_llm(
     page_text=page_text,
-    page_title="Undergraduate Research Opportunities Directory"
+    page_title="Summer Undergraduate Research Program"
 )
+
 
 print("\nEXTRACTION RESULT")
 print("-----------------")
-
 print(result.model_dump_json(indent=4))

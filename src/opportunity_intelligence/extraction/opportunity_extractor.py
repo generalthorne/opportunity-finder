@@ -1,3 +1,4 @@
+
 """Extract structured opportunities from investigated webpages."""
 
 from pathlib import Path
@@ -7,7 +8,12 @@ from opportunity_intelligence.extraction.deduplicate import (
     deduplicate_opportunities
 )
 
+from opportunity_intelligence.extraction.page_extractor import (
+    extract_opportunities_from_page
+)
+
 from opportunity_intelligence.models import Opportunity
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
@@ -27,9 +33,10 @@ OUTPUT_FILE = (
 
 
 def extract_opportunities(
-    input_file: Path = INPUT_FILE
+    input_file: Path = INPUT_FILE,
+    model: str | None = None
 ) -> list[Opportunity]:
-    """Extract opportunities from all investigated pages."""
+    """Extract and deduplicate opportunities from investigated pages."""
 
     with input_file.open("r", encoding="utf-8") as file:
         data = json.load(file)
@@ -37,7 +44,13 @@ def extract_opportunities(
     pages = data.get("pages", [])
     opportunities = []
 
-    # General extraction will be implemented here.
+    for page in pages:
+        page_opportunities = extract_opportunities_from_page(
+            page=page,
+            model=model
+        )
+
+        opportunities.extend(page_opportunities)
 
     return deduplicate_opportunities(opportunities)
 

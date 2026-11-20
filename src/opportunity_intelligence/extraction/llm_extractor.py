@@ -8,51 +8,70 @@ from opportunity_intelligence.extraction.ollama_client import (
 )
 
 from opportunity_intelligence.extraction.extraction_result import (
-    OpportunityExtractionResult
+    OpportunityExtractionResult,
+    PageExtractionResult
 )
-
 
 
 EXTRACTION_PROMPT = """
 You are a structured information extraction system.
 
-Your task is to extract information about employment, research,
-internship, co-op, fellowship, and similar opportunities from
-webpage content.
+Your task is to identify and extract employment, research,
+internship, co-op, fellowship, and similar opportunities
+from webpage content.
 
-First, determine whether the webpage describes an actual opportunity.
+A webpage may contain:
+- One individual position.
+- One structured program offering multiple positions.
+- A directory containing multiple distinct opportunities.
+- General informational content that describes no actual opportunity.
 
-An opportunity may be:
-- A specific individual position.
-- A structured program offering multiple positions.
-- A directory containing multiple opportunities.
+YOUR MAIN TASK:
 
-Do not classify ordinary informational pages as opportunities.
+Identify every distinct opportunity explicitly described
+on the webpage.
+
+If a directory lists several opportunities, extract each
+one as a separate entry in the opportunities list.
+
+Do not combine multiple distinct opportunities into one entry.
+
+Do not invent opportunities based on general descriptions
+or references to opportunities elsewhere.
+
+PAGE CLASSIFICATION:
+
+Set is_opportunity_page to true if the webpage describes
+at least one actual opportunity or provides a directory
+of identifiable opportunities.
+
+Set is_opportunity_page to false if the webpage only
+contains general informational content.
+
+If the page is not an opportunity page:
+- Return an empty opportunities list.
+- Do not invent opportunity details.
 
 EXTRACTION RULES:
 
-1. Extract every field that is explicitly supported by the webpage.
-2. Do not leave a field empty if the information is clearly stated.
-3. Do not invent information that is not present.
-4. Use null for missing optional single-value fields.
-5. Use empty lists only when no relevant list items are provided.
-6. Extract the organization from statements identifying who offers,
-   operates, or recruits for the opportunity.
-7. Extract the opportunity title from the page title or the
-   opportunity's stated name.
-8. Extract academic and technical subjects into the field list.
-9. Put explicit applicant qualifications into requirements.
-10. Record compensation exactly as described, such as "Paid".
-11. Preserve stated durations, such as "12 weeks".
+1. Extract every field explicitly supported by the webpage.
+2. Do not invent information.
+3. Use null for missing optional single-value fields.
+4. Use empty lists when no relevant list items are provided.
+5. Extract the organization offering or recruiting for each opportunity.
+6. Extract the stated opportunity title.
+7. Extract academic and technical subjects into field.
+8. Put explicit applicant qualifications into requirements.
+9. Put desirable but non-mandatory skills into preferred_skills.
+10. Record compensation as stated.
+11. Preserve stated durations.
 12. Distinguish application deadlines from program start dates.
 13. Preserve dates as written in the webpage.
-14. Include short, exact evidence excerpts from the webpage.
+14. Include short, exact evidence excerpts supporting each opportunity.
 15. Do not use reasoning as a substitute for populating fields.
 
-The evidence list should contain short excerpts directly copied
-from the webpage that support the extracted information.
+CATEGORIES:
 
-The category must be one of:
 Research
 Internship
 Co-op
@@ -61,69 +80,83 @@ University Employment
 Government
 Other
 
-The opportunity_type must be one of:
+OPPORTUNITY TYPES:
+
 Program
 Individual Position
 Opportunity Directory
 Unknown
 
-If the page does not describe an opportunity:
-- Set is_opportunity to false.
-- Do not invent opportunity details.
+DIRECTORY EXTRACTION:
 
+When a webpage contains a directory:
+- Extract each identifiable opportunity separately.
+- Use the individual opportunity's name as its title.
+- Extract its department, organization, field, and description
+  when explicitly provided.
+- Do not apply details from one listing to another.
+- Do not assume that every listing shares the same requirements,
+  compensation, duration, or deadline.
+- If a listing only provides a title and department, extract
+  those details and leave unsupported fields null.
+- Do not create an entry for vague references that do not identify
+  a distinct opportunity.
 
-FIELD-BY-FIELD EXTRACTION:
+SINGLE OPPORTUNITY EXTRACTION:
 
-For every webpage, inspect each field independently.
+When a webpage describes one position or program:
+- Return one entry in the opportunities list.
+- Extract all available information about that opportunity.
+- Do not create multiple entries for different details of the
+  same position or program.
 
-Before returning the result, check the following:
+EVIDENCE:
 
-- title: What is the name of the opportunity?
-- organization: Which organization offers or recruits for it?
-- field: What academic, technical, or professional subjects are mentioned?
-- requirements: What qualifications or conditions must applicants meet?
-- preferred_skills: What skills are desirable but not mandatory?
-- compensation: Is the position paid, unpaid, or does it provide a stated amount?
-- duration: How long does the opportunity last?
-- start_date: When does the opportunity begin?
-- deadline: When must applications be submitted?
-- eligibility: Who is permitted to apply?
-- application_url: Is an application link explicitly provided?
+Each opportunity must have its own evidence list.
 
-IMPORTANT:
+Evidence must consist of short, exact excerpts copied from
+the webpage that support the extracted information.
 
-Evidence excerpts are not substitutes for extracted fields.
+Do not use the entire webpage as evidence.
 
-If a fact appears in the webpage, populate its corresponding
-field even if that fact is also included in the evidence list.
+FIELD-BY-FIELD CHECK:
 
-For example:
+For every opportunity, independently inspect:
+- title
+- organization
+- category
+- opportunity_type
+- field
+- location
+- work_mode
+- description
+- requirements
+- preferred_skills
+- compensation
+- duration
+- start_date
+- deadline
+- eligibility
+- application_url
 
-Webpage:
-"The University of Example is recruiting undergraduate students
-for a summer research assistant position. The position is paid
-and lasts 12 weeks. Applications close March 15, 2027."
+Populate every field supported by the webpage.
 
-Expected extraction:
-- title: "Summer Research Assistant Position"
-- organization: "University of Example"
-- compensation: "Paid"
-- duration: "12 weeks"
-- deadline: "March 15, 2027"
-
-Do not leave these fields null when the information is explicitly
+Do not leave a field null when its information is explicitly
 available.
 
-"""
+The reasoning field should briefly explain the overall
+page classification and extraction decisions.
 
+Return only the structured JSON response.
+"""
 
 
 def extract_page_with_llm(
     page_text: str,
     page_title: str | None = None,
     model: str | None = None
-) -> OpportunityExtractionResult:
-    """Extract structured opportunity information from webpage text."""
+) -> PageExtractionResult:
+    """Extract zero or more opportunities from one webpage."""
 
     if not page_text or not page_text.strip():
         raise ValueError("Page text cannot be empty.")
@@ -138,7 +171,7 @@ Webpage content:
 {page_text}
 """
 
-    response_format = OpportunityExtractionResult.model_json_schema()
+    response_format = PageExtractionResult.model_json_schema()
 
     response_text = generate_response(
         prompt=prompt,
@@ -148,4 +181,4 @@ Webpage content:
 
     response_data = json.loads(response_text)
 
-    return OpportunityExtractionResult.model_validate(response_data)
+    return PageExtractionResult.model_validate(response_data)

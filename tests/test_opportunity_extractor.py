@@ -1,5 +1,7 @@
 import json
 
+from unittest.mock import patch
+
 from opportunity_intelligence.extraction.opportunity_extractor import (
     extract_opportunities,
     save_opportunities
@@ -86,3 +88,114 @@ def test_save_opportunities(tmp_path):
     assert data["opportunities"][0]["title"] == (
         "Undergraduate Research Assistant"
     )
+
+
+def test_extract_opportunities_processes_successful_pages(tmp_path):
+    input_file = tmp_path / "investigated_pages.json"
+
+    pages = {
+        "pages": [
+            {
+                "status": "success",
+                "url": "https://example.com/research",
+                "page_title": "Research",
+                "page_text": "Research opportunity."
+            }
+        ]
+    }
+
+    with input_file.open("w", encoding="utf-8") as file:
+        json.dump(pages, file)
+
+    opportunity = Opportunity(
+        title="Research Assistant",
+        organization="Example University",
+        category=OpportunityCategory.RESEARCH,
+        source_url="https://example.com/research"
+    )
+
+    with patch(
+        "opportunity_intelligence.extraction.opportunity_extractor.extract_opportunities_from_page",
+        return_value=[opportunity]
+    ) as mock_extract:
+
+        results = extract_opportunities(input_file)
+
+    assert len(results) == 1
+    assert results[0].title == "Research Assistant"
+    mock_extract.assert_called_once()
+
+
+def test_extract_opportunities_processes_multiple_pages(tmp_path):
+    input_file = tmp_path / "investigated_pages.json"
+
+    pages = {
+        "pages": [
+            {
+                "status": "success",
+                "url": "https://example.com/research",
+                "page_text": "Research opportunity."
+            },
+            {
+                "status": "success",
+                "url": "https://example.com/internship",
+                "page_text": "Internship opportunity."
+            }
+        ]
+    }
+
+    with input_file.open("w", encoding="utf-8") as file:
+        json.dump(pages, file)
+
+    first = Opportunity(
+        title="Research Assistant",
+        organization="Example University",
+        category=OpportunityCategory.RESEARCH,
+        source_url="https://example.com/research"
+    )
+
+    second = Opportunity(
+        title="Software Engineering Intern",
+        organization="Example Company",
+        category=OpportunityCategory.INTERNSHIP,
+        source_url="https://example.com/internship"
+    )
+
+    with patch(
+        "opportunity_intelligence.extraction.opportunity_extractor.extract_opportunities_from_page",
+        side_effect=[[first], [second]]
+    ) as mock_extract:
+
+        results = extract_opportunities(input_file)
+
+    assert len(results) == 2
+    assert mock_extract.call_count == 2
+
+
+def test_extract_opportunities_passes_model_to_page_extractor(tmp_path):
+    input_file = tmp_path / "investigated_pages.json"
+
+    pages = {
+        "pages": [
+            {
+                "status": "success",
+                "url": "https://example.com/research",
+                "page_text": "Research opportunity."
+            }
+        ]
+    }
+
+    with input_file.open("w", encoding="utf-8") as file:
+        json.dump(pages, file)
+
+    with patch(
+        "opportunity_intelligence.extraction.opportunity_extractor.extract_opportunities_from_page",
+        return_value=[]
+    ) as mock_extract:
+
+        extract_opportunities(
+            input_file,
+            model="qwen3:4b"
+        )
+
+    assert mock_extract.call_args.kwargs["model"] == "qwen3:4b"
