@@ -221,3 +221,27 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+# Virtual environment
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Environment variables
+.env
+
+# Generated data
+data/raw/*
+data/processed/*
+data/output/*
+data/database/*
+
+# Keep directory structure
+!.gitkeep
+
+# IDE
+.vscode/
