@@ -2,6 +2,7 @@
 from datetime import date, datetime
 from enum import Enum
 from typing import Optional
+
 from pydantic import BaseModel, HttpUrl, Field
 
 
@@ -13,6 +14,13 @@ class OpportunityCategory(str, Enum):
     UNIVERSITY_EMPLOYMENT = "University Employment"
     GOVERNMENT = "Government"
     OTHER = "Other"
+
+
+class OpportunityType(str, Enum):
+    PROGRAM = "Program"
+    INDIVIDUAL = "Individual Position"
+    DIRECTORY = "Opportunity Directory"
+    UNKNOWN = "Unknown"
 
 
 class OpportunityStatus(str, Enum):
@@ -29,6 +37,8 @@ class Opportunity(BaseModel):
     organization: str
 
     category: OpportunityCategory
+    opportunity_type: OpportunityType = OpportunityType.UNKNOWN
+
     field: list[str] = Field(default_factory=list)
 
     location: Optional[str] = None
@@ -49,6 +59,7 @@ class Opportunity(BaseModel):
 
     application_url: Optional[HttpUrl] = None
     source_url: HttpUrl
+    related_source_urls: list[HttpUrl] = Field(default_factory=list)
 
     date_discovered: date = Field(default_factory=date.today)
     last_verified: Optional[datetime] = None

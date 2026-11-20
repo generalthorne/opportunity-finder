@@ -2,7 +2,8 @@
 from opportunity_intelligence.models import (
     Opportunity,
     OpportunityCategory,
-    OpportunityStatus
+    OpportunityStatus,
+    OpportunityType
 )
 
 
@@ -22,3 +23,15 @@ def test_create_opportunity():
     assert opportunity.category == OpportunityCategory.RESEARCH
     assert opportunity.status == OpportunityStatus.OPEN
     assert opportunity.compensation is None
+
+
+def test_opportunity_type():
+    opportunity = Opportunity(
+        title="PEY Co-op",
+        organization="University of Toronto",
+        category=OpportunityCategory.COOP,
+        opportunity_type=OpportunityType.PROGRAM,
+        source_url="https://example.com"
+    )
+
+    assert opportunity.opportunity_type == OpportunityType.PROGRAM
