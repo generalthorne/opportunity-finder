@@ -1,10 +1,11 @@
-import json
 
+import json
 from unittest.mock import patch
 
 from opportunity_intelligence.extraction.opportunity_extractor import (
     extract_opportunities,
-    save_opportunities
+    save_opportunities,
+    save_review_candidates
 )
 
 from opportunity_intelligence.models import (
@@ -12,17 +13,8 @@ from opportunity_intelligence.models import (
     OpportunityCategory
 )
 
-import json
 
-from opportunity_intelligence.extraction.opportunity_extractor import (
-    extract_opportunities
-)
-
-
-def test_extract_opportunities_saves_quality_report(
-    tmp_path,
-    monkeypatch
-):
+def test_extract_opportunities_saves_quality_report(tmp_path):
     input_file = tmp_path / "investigated_pages.json"
     review_file = tmp_path / "review_candidates.json"
     quality_file = tmp_path / "quality_report.json"
@@ -32,15 +24,10 @@ def test_extract_opportunities_saves_quality_report(
         encoding="utf-8"
     )
 
-    monkeypatch.setattr(
-        "opportunity_intelligence.extraction.opportunity_extractor."
-        "QUALITY_REPORT_FILE",
-        quality_file
-    )
-
     extract_opportunities(
         input_file=input_file,
-        review_candidates_file=review_file
+        review_candidates_file=review_file,
+        quality_report_file=quality_file
     )
 
     assert quality_file.exists()
@@ -54,51 +41,42 @@ def test_extract_opportunities_saves_quality_report(
 
 
 def test_extract_opportunities_quality_report_contains_missing_fields(
-    tmp_path,
-    monkeypatch
+    tmp_path
 ):
-    from opportunity_intelligence.models import Opportunity
-
     input_file = tmp_path / "investigated_pages.json"
     review_file = tmp_path / "review_candidates.json"
     quality_file = tmp_path / "quality_report.json"
 
     input_file.write_text(
-    json.dumps({
-        "pages": [
-            {
-                "status": "success",
-                "url": "https://example.com/research",
-                "page_text": "Research opportunity."
-            }
-        ]
-    }),
-    encoding="utf-8"
-)
+        json.dumps({
+            "pages": [
+                {
+                    "status": "success",
+                    "url": "https://example.com/research",
+                    "page_text": "Research opportunity."
+                }
+            ]
+        }),
+        encoding="utf-8"
+    )
 
     opportunity = Opportunity(
         title="Research Assistant",
         organization="Example University",
-        category="Research",
+        category=OpportunityCategory.RESEARCH,
         source_url="https://example.com"
     )
 
-    monkeypatch.setattr(
+    with patch(
         "opportunity_intelligence.extraction.opportunity_extractor."
         "extract_opportunities_from_page",
-        lambda **kwargs: [opportunity]
-    )
-
-    monkeypatch.setattr(
-        "opportunity_intelligence.extraction.opportunity_extractor."
-        "QUALITY_REPORT_FILE",
-        quality_file
-    )
-
-    extract_opportunities(
-        input_file=input_file,
-        review_candidates_file=review_file
-    )
+        return_value=[opportunity]
+    ):
+        extract_opportunities(
+            input_file=input_file,
+            review_candidates_file=review_file,
+            quality_report_file=quality_file
+        )
 
     report = json.loads(
         quality_file.read_text(encoding="utf-8")
@@ -116,7 +94,11 @@ def test_extract_opportunities_handles_empty_pages_file(tmp_path):
     with input_file.open("w", encoding="utf-8") as file:
         json.dump({"pages": []}, file)
 
-    results = extract_opportunities(input_file)
+    results = extract_opportunities(
+        input_file=input_file,
+        review_candidates_file=tmp_path / "review_candidates.json",
+        quality_report_file=tmp_path / "quality_report.json"
+    )
 
     assert results == []
 
@@ -137,7 +119,11 @@ def test_extract_opportunities_handles_failed_pages(tmp_path):
     with input_file.open("w", encoding="utf-8") as file:
         json.dump(pages, file)
 
-    results = extract_opportunities(input_file)
+    results = extract_opportunities(
+        input_file=input_file,
+        review_candidates_file=tmp_path / "review_candidates.json",
+        quality_report_file=tmp_path / "quality_report.json"
+    )
 
     assert results == []
 
@@ -158,7 +144,11 @@ def test_extract_opportunities_handles_empty_page_text(tmp_path):
     with input_file.open("w", encoding="utf-8") as file:
         json.dump(pages, file)
 
-    results = extract_opportunities(input_file)
+    results = extract_opportunities(
+        input_file=input_file,
+        review_candidates_file=tmp_path / "review_candidates.json",
+        quality_report_file=tmp_path / "quality_report.json"
+    )
 
     assert results == []
 
@@ -212,11 +202,16 @@ def test_extract_opportunities_processes_successful_pages(tmp_path):
     )
 
     with patch(
-        "opportunity_intelligence.extraction.opportunity_extractor.extract_opportunities_from_page",
+        "opportunity_intelligence.extraction.opportunity_extractor."
+        "extract_opportunities_from_page",
         return_value=[opportunity]
     ) as mock_extract:
 
-        results = extract_opportunities(input_file)
+        results = extract_opportunities(
+            input_file=input_file,
+            review_candidates_file=tmp_path / "review_candidates.json",
+            quality_report_file=tmp_path / "quality_report.json"
+        )
 
     assert len(results) == 1
     assert results[0].title == "Research Assistant"
@@ -259,11 +254,16 @@ def test_extract_opportunities_processes_multiple_pages(tmp_path):
     )
 
     with patch(
-        "opportunity_intelligence.extraction.opportunity_extractor.extract_opportunities_from_page",
+        "opportunity_intelligence.extraction.opportunity_extractor."
+        "extract_opportunities_from_page",
         side_effect=[[first], [second]]
     ) as mock_extract:
 
-        results = extract_opportunities(input_file)
+        results = extract_opportunities(
+            input_file=input_file,
+            review_candidates_file=tmp_path / "review_candidates.json",
+            quality_report_file=tmp_path / "quality_report.json"
+        )
 
     assert len(results) == 2
     assert mock_extract.call_count == 2
@@ -286,17 +286,19 @@ def test_extract_opportunities_passes_model_to_page_extractor(tmp_path):
         json.dump(pages, file)
 
     with patch(
-        "opportunity_intelligence.extraction.opportunity_extractor.extract_opportunities_from_page",
+        "opportunity_intelligence.extraction.opportunity_extractor."
+        "extract_opportunities_from_page",
         return_value=[]
     ) as mock_extract:
 
         extract_opportunities(
-            input_file,
-            model="qwen3:4b"
+            input_file=input_file,
+            model="qwen3:4b",
+            review_candidates_file=tmp_path / "review_candidates.json",
+            quality_report_file=tmp_path / "quality_report.json"
         )
 
     assert mock_extract.call_args.kwargs["model"] == "qwen3:4b"
-
 
 
 def test_extract_opportunities_continues_after_page_failure(tmp_path):
@@ -322,9 +324,16 @@ def test_extract_opportunities_continues_after_page_failure(tmp_path):
     with patch(
         "opportunity_intelligence.extraction.opportunity_extractor."
         "extract_opportunities_from_page",
-        side_effect=[[first_opportunity], RuntimeError("Extraction failed")]
+        side_effect=[
+            [first_opportunity],
+            RuntimeError("Extraction failed")
+        ]
     ):
-        results = extract_opportunities(input_file)
+        results = extract_opportunities(
+            input_file=input_file,
+            review_candidates_file=tmp_path / "review_candidates.json",
+            quality_report_file=tmp_path / "quality_report.json"
+        )
 
     assert len(results) == 1
     assert results[0] == first_opportunity
@@ -351,14 +360,14 @@ def test_extract_opportunities_respects_max_pages(tmp_path):
     ) as mock_extract:
 
         results = extract_opportunities(
-            input_file,
-            max_pages=2
+            input_file=input_file,
+            max_pages=2,
+            review_candidates_file=tmp_path / "review_candidates.json",
+            quality_report_file=tmp_path / "quality_report.json"
         )
 
     assert results == []
     assert mock_extract.call_count == 2
-
-
 
 
 def test_extract_opportunities_saves_review_candidates(tmp_path):
@@ -378,25 +387,15 @@ def test_extract_opportunities_saves_review_candidates(tmp_path):
     with input_file.open("w", encoding="utf-8") as file:
         json.dump(pages, file)
 
-    candidate = {
-        "url": "https://example.com/research",
-        "page_title": "Research",
-        "relevance_score": 7,
-        "link_type": "opportunity",
-        "matched_keywords": ["research"],
-        "discovered_in": [],
-        "llm_confidence": 0.95,
-        "llm_reasoning": "No opportunity found.",
-        "review_reason": "High-relevance page rejected after retry."
-    }
-
     with patch(
-        "opportunity_intelligence.extraction.opportunity_extractor.extract_opportunities_from_page",
+        "opportunity_intelligence.extraction.opportunity_extractor."
+        "extract_opportunities_from_page",
         return_value=[]
     ):
         results = extract_opportunities(
-            input_file,
-            review_candidates_file=review_file
+            input_file=input_file,
+            review_candidates_file=review_file,
+            quality_report_file=tmp_path / "quality_report.json"
         )
 
     assert results == []
@@ -412,12 +411,6 @@ def test_extract_opportunities_saves_review_candidates(tmp_path):
 def test_extract_opportunities_saves_empty_review_file(tmp_path):
     review_file = tmp_path / "review_candidates.json"
 
-    save_opportunities([])
-
-    from opportunity_intelligence.extraction.opportunity_extractor import (
-        save_review_candidates
-    )
-
     save_review_candidates([], review_file)
 
     with review_file.open("r", encoding="utf-8") as file:
@@ -425,3 +418,66 @@ def test_extract_opportunities_saves_empty_review_file(tmp_path):
 
     assert data["total_review_candidates"] == 0
     assert data["review_candidates"] == []
+
+
+def test_extract_opportunities_processes_multiple_opportunities_from_one_page(
+    tmp_path
+):
+    input_file = tmp_path / "investigated_pages.json"
+    output_file = tmp_path / "opportunities.json"
+
+    pages = {
+        "pages": [
+            {
+                "status": "success",
+                "url": "https://example.com/research-directory",
+                "page_title": "Research Opportunities",
+                "page_text": "A directory of research opportunities."
+            }
+        ]
+    }
+
+    with input_file.open("w", encoding="utf-8") as file:
+        json.dump(pages, file)
+
+    opportunities = [
+        Opportunity(
+            title="Machine Learning Research Assistant",
+            organization="Example University",
+            category=OpportunityCategory.RESEARCH,
+            source_url="https://example.com/research-directory"
+        ),
+        Opportunity(
+            title="Biomedical Research Program",
+            organization="Example University",
+            category=OpportunityCategory.RESEARCH,
+            source_url="https://example.com/research-directory"
+        ),
+        Opportunity(
+            title="Environmental Research Internship",
+            organization="Example University",
+            category=OpportunityCategory.INTERNSHIP,
+            source_url="https://example.com/research-directory"
+        )
+    ]
+
+    with patch(
+        "opportunity_intelligence.extraction.opportunity_extractor."
+        "extract_opportunities_from_page",
+        return_value=opportunities
+    ):
+        results = extract_opportunities(
+            input_file=input_file,
+            review_candidates_file=tmp_path / "review_candidates.json",
+            quality_report_file=tmp_path / "quality_report.json"
+        )
+
+    save_opportunities(results, output_file)
+
+    assert len(results) == 3
+
+    with output_file.open("r", encoding="utf-8") as file:
+        data = json.load(file)
+
+    assert data["total_opportunities"] == 3
+    assert len(data["opportunities"]) == 3

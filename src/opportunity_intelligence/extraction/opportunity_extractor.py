@@ -8,27 +8,17 @@ import logging
 from opportunity_intelligence.extraction.deduplicate import (
     deduplicate_opportunities
 )
-
 from opportunity_intelligence.extraction.page_extractor import (
     extract_opportunities_from_page
 )
-
-from opportunity_intelligence.models import Opportunity
-
 from opportunity_intelligence.extraction.quality_report import (
     build_quality_report
 )
+from opportunity_intelligence.models import Opportunity
 
 logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-
-QUALITY_REPORT_FILE = (
-    PROJECT_ROOT
-    / "data"
-    / "processed"
-    / "quality_report.json"
-)
 
 INPUT_FILE = (
     PROJECT_ROOT
@@ -51,12 +41,20 @@ REVIEW_CANDIDATES_FILE = (
     / "review_candidates.json"
 )
 
+QUALITY_REPORT_FILE = (
+    PROJECT_ROOT
+    / "data"
+    / "processed"
+    / "quality_report.json"
+)
+
 
 def extract_opportunities(
     input_file: Path = INPUT_FILE,
     model: str | None = None,
     max_pages: int | None = None,
-    review_candidates_file: Path = REVIEW_CANDIDATES_FILE
+    review_candidates_file: Path = REVIEW_CANDIDATES_FILE,
+    quality_report_file: Path = QUALITY_REPORT_FILE
 ) -> list[Opportunity]:
     """Extract and deduplicate opportunities from investigated pages."""
 
@@ -110,7 +108,10 @@ def extract_opportunities(
 
     quality_report = build_quality_report(unique_opportunities)
 
-    save_quality_report(quality_report)
+    save_quality_report(
+        quality_report,
+        quality_report_file
+    )
 
     logger.info(
         "Opportunities needing review: %d",
@@ -175,6 +176,18 @@ def save_review_candidates(
         json.dump(data, file, indent=4, ensure_ascii=False)
 
 
+def save_quality_report(
+    report: dict,
+    output_file: Path = QUALITY_REPORT_FILE
+) -> None:
+    """Save the extraction quality report as JSON."""
+
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    with output_file.open("w", encoding="utf-8") as file:
+        json.dump(report, file, indent=4, ensure_ascii=False)
+
+
 if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO,
@@ -188,18 +201,4 @@ if __name__ == "__main__":
     print(f"Opportunities extracted: {len(opportunities)}")
     print(f"Results saved to: {OUTPUT_FILE}")
     print(f"Review candidates saved to: {REVIEW_CANDIDATES_FILE}")
-
-
-def save_quality_report(
-    report: dict,
-    output_file: Path | None = None
-) -> None:
-    """Save the extraction quality report as JSON."""
-
-    if output_file is None:
-        output_file = QUALITY_REPORT_FILE
-
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-
-    with output_file.open("w", encoding="utf-8") as file:
-        json.dump(report, file, indent=4, ensure_ascii=False)
+    print(f"Quality report saved to: {QUALITY_REPORT_FILE}")
