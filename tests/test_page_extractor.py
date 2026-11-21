@@ -214,3 +214,88 @@ def test_parse_date_handles_missing_or_unsupported_values():
     assert parse_date(None) is None
     assert parse_date("") is None
     assert parse_date("Spring 2027") is None
+
+
+
+def test_high_relevance_page_is_retried_and_extracted():
+    rejected_result = PageExtractionResult(
+        is_opportunity_page=False,
+        confidence=0.95,
+        opportunities=[]
+    )
+
+    accepted_result = create_extraction_result()
+
+    page = create_page()
+    page["relevance_score"] = 7
+    page["link_type"] = "informational"
+
+    with patch(
+        "opportunity_intelligence.extraction.page_extractor.extract_page_with_llm",
+        side_effect=[rejected_result, accepted_result]
+    ) as mock_extract:
+
+        results = extract_opportunities_from_page(page)
+
+    assert len(results) == 1
+    assert results[0].title == "Undergraduate Research Assistant"
+    assert mock_extract.call_count == 2
+
+    assert mock_extract.call_args_list[1].kwargs[
+        "high_relevance_retry"
+    ] is True
+
+
+def test_high_relevance_page_rejected_twice_becomes_review_candidate():
+    rejected_result = PageExtractionResult(
+        is_opportunity_page=False,
+        confidence=0.95,
+        opportunities=[],
+        reasoning="No identifiable opportunity was found."
+    )
+
+    page = create_page()
+    page["relevance_score"] = 7
+    page["link_type"] = "informational"
+
+    review_candidates = []
+
+    with patch(
+        "opportunity_intelligence.extraction.page_extractor.extract_page_with_llm",
+        return_value=rejected_result
+    ) as mock_extract:
+
+        results = extract_opportunities_from_page(
+            page,
+            review_candidates=review_candidates
+        )
+
+    assert results == []
+    assert mock_extract.call_count == 2
+
+    assert len(review_candidates) == 1
+    assert review_candidates[0]["url"] == page["url"]
+    assert review_candidates[0]["relevance_score"] == 7
+    assert review_candidates[0]["llm_confidence"] == 0.95
+
+
+def test_low_relevance_page_is_not_retried():
+    rejected_result = PageExtractionResult(
+        is_opportunity_page=False,
+        confidence=0.95,
+        opportunities=[]
+    )
+
+    page = create_page()
+    page["relevance_score"] = 2
+    page["link_type"] = "other"
+
+    with patch(
+        "opportunity_intelligence.extraction.page_extractor.extract_page_with_llm",
+        return_value=rejected_result
+    ) as mock_extract:
+
+        results = extract_opportunities_from_page(page)
+
+    assert results == []
+    mock_extract.assert_called_once()

@@ -8,7 +8,6 @@ from opportunity_intelligence.extraction.ollama_client import (
 )
 
 from opportunity_intelligence.extraction.extraction_result import (
-    OpportunityExtractionResult,
     PageExtractionResult
 )
 
@@ -64,14 +63,64 @@ Return valid JSON matching the provided schema.
 """
 
 
+HIGH_RELEVANCE_RETRY_INSTRUCTIONS = """
+IMPORTANT: REASSESS THE PAGE CLASSIFICATION.
+
+This webpage was independently identified as highly relevant by
+a separate link-analysis stage. Your initial classification may
+have been too restrictive.
+
+Check carefully for:
+- Named research programs, internships, co-op programs, fellowships,
+  student employment positions, and similar opportunities.
+- Opportunities restricted to a particular university, faculty,
+  department, academic year, or student group.
+- Programs that are described on informational or application pages.
+- Individual opportunities listed within a directory.
+
+Eligibility restrictions do NOT mean that something is not an
+opportunity. Do not reject a program merely because it is limited
+to a specific group of students.
+
+If the page identifies or describes an actual opportunity, set
+is_opportunity_page to true and extract the supported details.
+
+However, do not invent opportunities. If the page contains only
+general information and does not identify or describe an actual
+opportunity, set is_opportunity_page to false.
+
+Return valid JSON matching the provided schema.
+"""
+
+
 def normalize_extraction_data(data: dict) -> dict:
     """Normalize common missing-value representations from the LLM."""
 
     missing_values = {"", "n/a", "na", "none", "null", "unknown"}
 
+    nullable_fields = {
+        "title",
+        "organization",
+        "category",
+        "location",
+        "work_mode",
+        "description",
+        "compensation",
+        "duration",
+        "start_date",
+        "deadline",
+        "eligibility",
+        "application_url"
+    }
+
     for opportunity in data.get("opportunities", []):
-        for key, value in opportunity.items():
-            if isinstance(value, str) and value.strip().lower() in missing_values:
+        for key in nullable_fields:
+            value = opportunity.get(key)
+
+            if (
+                isinstance(value, str)
+                and value.strip().lower() in missing_values
+            ):
                 opportunity[key] = None
 
     return data
@@ -80,15 +129,24 @@ def normalize_extraction_data(data: dict) -> dict:
 def extract_page_with_llm(
     page_text: str,
     page_title: str | None = None,
-    model: str | None = None
+    model: str | None = None,
+    high_relevance_retry: bool = False
 ) -> PageExtractionResult:
     """Extract zero or more opportunities from one webpage."""
 
     if not page_text or not page_text.strip():
         raise ValueError("Page text cannot be empty.")
 
+    retry_instructions = (
+        HIGH_RELEVANCE_RETRY_INSTRUCTIONS
+        if high_relevance_retry
+        else ""
+    )
+
     prompt = f"""
 {EXTRACTION_PROMPT}
+
+{retry_instructions}
 
 Webpage title:
 {page_title or "Unknown"}
@@ -105,7 +163,12 @@ Webpage content:
         response_format=response_format
     )
 
-    response_data = json.loads(response_text)
+    try:
+        response_data = json.loads(response_text)
+    except json.JSONDecodeError as error:
+        raise ValueError(
+            "The LLM returned invalid JSON."
+        ) from error
 
     response_data = normalize_extraction_data(response_data)
 

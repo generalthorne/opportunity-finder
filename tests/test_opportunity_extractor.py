@@ -260,3 +260,71 @@ def test_extract_opportunities_respects_max_pages(tmp_path):
 
     assert results == []
     assert mock_extract.call_count == 2
+
+
+
+
+def test_extract_opportunities_saves_review_candidates(tmp_path):
+    input_file = tmp_path / "investigated_pages.json"
+    review_file = tmp_path / "review_candidates.json"
+
+    pages = {
+        "pages": [
+            {
+                "status": "success",
+                "url": "https://example.com/research",
+                "page_text": "Research opportunity."
+            }
+        ]
+    }
+
+    with input_file.open("w", encoding="utf-8") as file:
+        json.dump(pages, file)
+
+    candidate = {
+        "url": "https://example.com/research",
+        "page_title": "Research",
+        "relevance_score": 7,
+        "link_type": "opportunity",
+        "matched_keywords": ["research"],
+        "discovered_in": [],
+        "llm_confidence": 0.95,
+        "llm_reasoning": "No opportunity found.",
+        "review_reason": "High-relevance page rejected after retry."
+    }
+
+    with patch(
+        "opportunity_intelligence.extraction.opportunity_extractor.extract_opportunities_from_page",
+        return_value=[]
+    ):
+        results = extract_opportunities(
+            input_file,
+            review_candidates_file=review_file
+        )
+
+    assert results == []
+    assert review_file.exists()
+
+    with review_file.open("r", encoding="utf-8") as file:
+        data = json.load(file)
+
+    assert data["total_review_candidates"] == 0
+    assert data["review_candidates"] == []
+
+
+def test_extract_opportunities_saves_empty_review_file(tmp_path):
+    review_file = tmp_path / "review_candidates.json"
+
+    save_opportunities([])
+
+    from opportunity_intelligence.extraction.opportunity_extractor import (
+        save_review_candidates
+    )
+
+    save_review_candidates([], review_file)
+
+    with review_file.open("r", encoding="utf-8") as file:
+        data = json.load(file)
+
+    assert data["total_review_candidates"] == 0
+    assert data["review_candidates"] == []

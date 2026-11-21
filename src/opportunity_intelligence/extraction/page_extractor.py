@@ -43,6 +43,15 @@ def parse_date(value: str | None) -> date | None:
     return None
 
 
+def is_high_relevance_page(page: dict) -> bool:
+    """Determine whether link analysis identified this page as relevant."""
+
+    return (
+        page.get("relevance_score", 0) >= 5
+        or page.get("link_type") in {"opportunity", "directory"}
+    )
+
+
 def convert_extraction_to_opportunities(
     extraction_result,
     source_url: str
@@ -108,7 +117,8 @@ def convert_extraction_to_opportunities(
 
 def extract_opportunities_from_page(
     page: dict,
-    model: str | None = None
+    model: str | None = None,
+    review_candidates: list[dict] | None = None
 ) -> list[Opportunity]:
     """Extract zero or more opportunities from one investigated page."""
 
@@ -135,7 +145,46 @@ def extract_opportunities_from_page(
     )
 
     if not extraction_result.is_opportunity_page:
-        return []
+
+        if not is_high_relevance_page(page):
+            return []
+
+        logger.info(
+            "High-relevance page rejected by initial extraction. "
+            "Retrying: %s",
+            source_url
+        )
+
+        extraction_result = extract_page_with_llm(
+            page_text=cleaned_text,
+            page_title=page.get("page_title"),
+            model=model,
+            high_relevance_retry=True
+        )
+
+        if not extraction_result.is_opportunity_page:
+            logger.warning(
+                "High-relevance page rejected after retry. "
+                "Adding to review candidates: %s",
+                source_url
+            )
+
+            if review_candidates is not None:
+                review_candidates.append({
+                    "url": source_url,
+                    "page_title": page.get("page_title"),
+                    "relevance_score": page.get("relevance_score"),
+                    "link_type": page.get("link_type"),
+                    "matched_keywords": page.get("matched_keywords", []),
+                    "discovered_in": page.get("discovered_in", []),
+                    "llm_confidence": extraction_result.confidence,
+                    "llm_reasoning": extraction_result.reasoning,
+                    "review_reason": (
+                        "High-relevance page rejected after retry."
+                    )
+                })
+
+            return []
 
     return convert_extraction_to_opportunities(
         extraction_result=extraction_result,
