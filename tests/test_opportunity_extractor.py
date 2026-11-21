@@ -12,6 +12,103 @@ from opportunity_intelligence.models import (
     OpportunityCategory
 )
 
+import json
+
+from opportunity_intelligence.extraction.opportunity_extractor import (
+    extract_opportunities
+)
+
+
+def test_extract_opportunities_saves_quality_report(
+    tmp_path,
+    monkeypatch
+):
+    input_file = tmp_path / "investigated_pages.json"
+    review_file = tmp_path / "review_candidates.json"
+    quality_file = tmp_path / "quality_report.json"
+
+    input_file.write_text(
+        json.dumps({"pages": []}),
+        encoding="utf-8"
+    )
+
+    monkeypatch.setattr(
+        "opportunity_intelligence.extraction.opportunity_extractor."
+        "QUALITY_REPORT_FILE",
+        quality_file
+    )
+
+    extract_opportunities(
+        input_file=input_file,
+        review_candidates_file=review_file
+    )
+
+    assert quality_file.exists()
+
+    report = json.loads(
+        quality_file.read_text(encoding="utf-8")
+    )
+
+    assert report["total_opportunities"] == 0
+    assert report["opportunities_needing_review"] == 0
+
+
+def test_extract_opportunities_quality_report_contains_missing_fields(
+    tmp_path,
+    monkeypatch
+):
+    from opportunity_intelligence.models import Opportunity
+
+    input_file = tmp_path / "investigated_pages.json"
+    review_file = tmp_path / "review_candidates.json"
+    quality_file = tmp_path / "quality_report.json"
+
+    input_file.write_text(
+    json.dumps({
+        "pages": [
+            {
+                "status": "success",
+                "url": "https://example.com/research",
+                "page_text": "Research opportunity."
+            }
+        ]
+    }),
+    encoding="utf-8"
+)
+
+    opportunity = Opportunity(
+        title="Research Assistant",
+        organization="Example University",
+        category="Research",
+        source_url="https://example.com"
+    )
+
+    monkeypatch.setattr(
+        "opportunity_intelligence.extraction.opportunity_extractor."
+        "extract_opportunities_from_page",
+        lambda **kwargs: [opportunity]
+    )
+
+    monkeypatch.setattr(
+        "opportunity_intelligence.extraction.opportunity_extractor."
+        "QUALITY_REPORT_FILE",
+        quality_file
+    )
+
+    extract_opportunities(
+        input_file=input_file,
+        review_candidates_file=review_file
+    )
+
+    report = json.loads(
+        quality_file.read_text(encoding="utf-8")
+    )
+
+    assert report["total_opportunities"] == 1
+    assert report["opportunities_needing_review"] == 1
+    assert report["missing_field_counts"]["description"] == 1
+    assert report["missing_field_counts"]["evidence"] == 1
+
 
 def test_extract_opportunities_handles_empty_pages_file(tmp_path):
     input_file = tmp_path / "investigated_pages.json"

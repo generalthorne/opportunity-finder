@@ -15,10 +15,20 @@ from opportunity_intelligence.extraction.page_extractor import (
 
 from opportunity_intelligence.models import Opportunity
 
+from opportunity_intelligence.extraction.quality_report import (
+    build_quality_report
+)
 
 logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
+QUALITY_REPORT_FILE = (
+    PROJECT_ROOT
+    / "data"
+    / "processed"
+    / "quality_report.json"
+)
 
 INPUT_FILE = (
     PROJECT_ROOT
@@ -98,6 +108,15 @@ def extract_opportunities(
 
     unique_opportunities = deduplicate_opportunities(opportunities)
 
+    quality_report = build_quality_report(unique_opportunities)
+
+    save_quality_report(quality_report)
+
+    logger.info(
+        "Opportunities needing review: %d",
+        quality_report["opportunities_needing_review"]
+    )
+
     save_review_candidates(
         review_candidates,
         review_candidates_file
@@ -169,3 +188,18 @@ if __name__ == "__main__":
     print(f"Opportunities extracted: {len(opportunities)}")
     print(f"Results saved to: {OUTPUT_FILE}")
     print(f"Review candidates saved to: {REVIEW_CANDIDATES_FILE}")
+
+
+def save_quality_report(
+    report: dict,
+    output_file: Path | None = None
+) -> None:
+    """Save the extraction quality report as JSON."""
+
+    if output_file is None:
+        output_file = QUALITY_REPORT_FILE
+
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    with output_file.open("w", encoding="utf-8") as file:
+        json.dump(report, file, indent=4, ensure_ascii=False)

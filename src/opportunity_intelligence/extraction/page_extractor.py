@@ -24,9 +24,13 @@ DATE_FORMATS = [
     "%B %d, %Y",
     "%b %d, %Y",
     "%d %B %Y",
-    "%Y-%m-%d"
+    "%d %b %Y",
+    "%Y-%m-%d",
+    "%m/%d/%Y",
+    "%d/%m/%Y",
+    "%B %Y",
+    "%b %Y",
 ]
-
 
 def parse_date(value: str | None) -> date | None:
     """Convert a supported date string into a date object."""
@@ -34,14 +38,25 @@ def parse_date(value: str | None) -> date | None:
     if not value:
         return None
 
+    value = value.strip()
+
     for date_format in DATE_FORMATS:
         try:
-            return datetime.strptime(value.strip(), date_format).date()
+            parsed_date = datetime.strptime(
+                value,
+                date_format
+            ).date()
+
+            # Month-only dates are incomplete.
+            if date_format in {"%B %Y", "%b %Y"}:
+                return None
+
+            return parsed_date
+
         except ValueError:
             continue
 
     return None
-
 
 def is_high_relevance_page(page: dict) -> bool:
     """Determine whether link analysis identified this page as relevant."""
@@ -98,7 +113,9 @@ def convert_extraction_to_opportunities(
             "eligibility": extracted.eligibility,
             "application_url": extracted.application_url,
             "source_url": source_url,
-            "evidence": extracted.evidence
+            "evidence": extracted.evidence,
+            "start_date_text": extracted.start_date_text or extracted.start_date,
+            "deadline_text": extracted.deadline_text or extracted.deadline
         }
 
         try:

@@ -33,6 +33,8 @@ class OpportunityExtractionResult(BaseModel):
 
     start_date: str | None = None
     deadline: str | None = None
+    start_date_text: str | None = None
+    deadline_text: str | None = None
     eligibility: str | None = None
 
     application_url: HttpUrl | None = None

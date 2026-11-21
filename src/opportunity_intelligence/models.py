@@ -3,7 +3,7 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, HttpUrl, Field
+from pydantic import BaseModel, HttpUrl, Field, field_validator
 
 
 class OpportunityCategory(str, Enum):
@@ -40,11 +40,12 @@ class Opportunity(BaseModel):
     opportunity_type: OpportunityType = OpportunityType.UNKNOWN
 
     field: list[str] = Field(default_factory=list)
-
+    
     location: Optional[str] = None
     work_mode: Optional[str] = None
 
     description: Optional[str] = None
+    evidence: list[str] = Field(default_factory=list)
 
     requirements: list[str] = Field(default_factory=list)
     preferred_skills: list[str] = Field(default_factory=list)
@@ -54,6 +55,9 @@ class Opportunity(BaseModel):
 
     start_date: Optional[date] = None
     deadline: Optional[date] = None
+
+    start_date_text: Optional[str] = None
+    deadline_text: Optional[str] = None 
 
     eligibility: Optional[str] = None
 
@@ -65,3 +69,13 @@ class Opportunity(BaseModel):
     last_verified: Optional[datetime] = None
 
     status: OpportunityStatus = OpportunityStatus.UNKNOWN
+
+    @field_validator("title", "organization")
+    @classmethod
+    def validate_required_text(cls, value: str) -> str:
+        value = value.strip()
+
+        if not value:
+            raise ValueError("This field cannot be empty.")
+
+        return value

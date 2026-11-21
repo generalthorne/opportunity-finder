@@ -15,8 +15,8 @@ logging.basicConfig(
 
 if __name__ == "__main__":
     opportunities = extract_opportunities(
-        max_pages=1,
-        model="qwen3:4b"
+        max_pages=5,
+        model="qwen3:8b"
     )
 
     save_opportunities(opportunities)
