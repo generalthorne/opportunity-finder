@@ -8,34 +8,10 @@ from opportunity_intelligence.models import (
     OpportunityType
 )
 
-
 class OpportunityExtractionResult(BaseModel):
     """Represent one opportunity extracted from a webpage."""
 
-    model_config = ConfigDict(
-        extra="forbid",
-        json_schema_extra={
-            "required": [
-                "title",
-                "organization",
-                "category",
-                "opportunity_type",
-                "field",
-                "location",
-                "work_mode",
-                "description",
-                "requirements",
-                "preferred_skills",
-                "compensation",
-                "duration",
-                "start_date",
-                "deadline",
-                "eligibility",
-                "application_url",
-                "evidence"
-            ]
-        }
-    )
+    model_config = ConfigDict(extra="forbid")
 
     title: str | None = None
     organization: str | None = None

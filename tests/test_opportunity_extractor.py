@@ -199,3 +199,64 @@ def test_extract_opportunities_passes_model_to_page_extractor(tmp_path):
         )
 
     assert mock_extract.call_args.kwargs["model"] == "qwen3:4b"
+
+
+
+def test_extract_opportunities_continues_after_page_failure(tmp_path):
+    input_file = tmp_path / "investigated_pages.json"
+
+    pages = {
+        "pages": [
+            {"url": "https://example.com/1", "status": "success"},
+            {"url": "https://example.com/2", "status": "success"}
+        ]
+    }
+
+    with input_file.open("w", encoding="utf-8") as file:
+        json.dump(pages, file)
+
+    first_opportunity = Opportunity(
+        title="Research Assistant",
+        organization="Example University",
+        category=OpportunityCategory.RESEARCH,
+        source_url="https://example.com/1"
+    )
+
+    with patch(
+        "opportunity_intelligence.extraction.opportunity_extractor."
+        "extract_opportunities_from_page",
+        side_effect=[[first_opportunity], RuntimeError("Extraction failed")]
+    ):
+        results = extract_opportunities(input_file)
+
+    assert len(results) == 1
+    assert results[0] == first_opportunity
+
+
+def test_extract_opportunities_respects_max_pages(tmp_path):
+    input_file = tmp_path / "investigated_pages.json"
+
+    pages = {
+        "pages": [
+            {"url": "https://example.com/1", "status": "success"},
+            {"url": "https://example.com/2", "status": "success"},
+            {"url": "https://example.com/3", "status": "success"}
+        ]
+    }
+
+    with input_file.open("w", encoding="utf-8") as file:
+        json.dump(pages, file)
+
+    with patch(
+        "opportunity_intelligence.extraction.opportunity_extractor."
+        "extract_opportunities_from_page",
+        return_value=[]
+    ) as mock_extract:
+
+        results = extract_opportunities(
+            input_file,
+            max_pages=2
+        )
+
+    assert results == []
+    assert mock_extract.call_count == 2
