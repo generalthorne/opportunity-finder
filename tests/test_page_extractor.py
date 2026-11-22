@@ -4,7 +4,8 @@ from unittest.mock import patch
 from opportunity_intelligence.extraction.page_extractor import (
     extract_opportunities_from_page,
     convert_extraction_to_opportunities,
-    parse_date
+    parse_date,
+    should_send_page_to_llm,
 )
 
 from opportunity_intelligence.extraction.extraction_result import (
@@ -21,10 +22,14 @@ from opportunity_intelligence.models import (
 
 def create_page(
     status="success",
-    page_text="Example research opportunity.",
+    page_text=(
+        "Undergraduate Research Assistant positions are available. "
+        "Students can apply to work with faculty on research projects. "
+        * 10
+    ),
     url="https://example.com/research"
 ):
-    """Create a representative investigated page."""
+    """Create a representative investigated opportunity page."""
     return {
         "status": status,
         "url": url,
@@ -216,86 +221,72 @@ def test_parse_date_handles_missing_or_unsupported_values():
     assert parse_date("Spring 2027") is None
 
 
+def test_pre_filter_rejects_empty_and_short_pages():
+    assert not should_send_page_to_llm("")
+    assert not should_send_page_to_llm("A" * 249)
 
-def test_high_relevance_page_is_retried_and_extracted():
-    rejected_result = PageExtractionResult(
-        is_opportunity_page=False,
-        confidence=0.95,
-        opportunities=[]
+
+def test_pre_filter_rejects_administrative_pages():
+    page_text = (
+        "This page contains information about our organization. "
+        * 30
     )
 
-    accepted_result = create_extraction_result()
-
-    page = create_page()
-    page["relevance_score"] = 7
-    page["link_type"] = "informational"
-
-    with patch(
-        "opportunity_intelligence.extraction.page_extractor.extract_page_with_llm",
-        side_effect=[rejected_result, accepted_result]
-    ) as mock_extract:
-
-        results = extract_opportunities_from_page(page)
-
-    assert len(results) == 1
-    assert results[0].title == "Undergraduate Research Assistant"
-    assert mock_extract.call_count == 2
-
-    assert mock_extract.call_args_list[1].kwargs[
-        "high_relevance_retry"
-    ] is True
-
-
-def test_high_relevance_page_rejected_twice_becomes_review_candidate():
-    rejected_result = PageExtractionResult(
-        is_opportunity_page=False,
-        confidence=0.95,
-        opportunities=[],
-        reasoning="No identifiable opportunity was found."
+    assert not should_send_page_to_llm(
+        page_text,
+        page_title="Privacy Policy",
     )
 
-    page = create_page()
-    page["relevance_score"] = 7
-    page["link_type"] = "informational"
 
-    review_candidates = []
-
-    with patch(
-        "opportunity_intelligence.extraction.page_extractor.extract_page_with_llm",
-        return_value=rejected_result
-    ) as mock_extract:
-
-        results = extract_opportunities_from_page(
-            page,
-            review_candidates=review_candidates
-        )
-
-    assert results == []
-    assert mock_extract.call_count == 2
-
-    assert len(review_candidates) == 1
-    assert review_candidates[0]["url"] == page["url"]
-    assert review_candidates[0]["relevance_score"] == 7
-    assert review_candidates[0]["llm_confidence"] == 0.95
-
-
-def test_low_relevance_page_is_not_retried():
-    rejected_result = PageExtractionResult(
-        is_opportunity_page=False,
-        confidence=0.95,
-        opportunities=[]
+def test_pre_filter_rejects_pages_without_opportunity_indicators():
+    page_text = (
+        "This page describes the history of the university, "
+        "its buildings, departments, and administrative structure. "
+        * 10
     )
 
-    page = create_page()
-    page["relevance_score"] = 2
-    page["link_type"] = "other"
+    assert not should_send_page_to_llm(page_text)
 
-    with patch(
-        "opportunity_intelligence.extraction.page_extractor.extract_page_with_llm",
-        return_value=rejected_result
-    ) as mock_extract:
 
-        results = extract_opportunities_from_page(page)
+def test_pre_filter_accepts_research_opportunity_pages():
+    page_text = (
+        "Undergraduate Research Assistant positions are available. "
+        "Students can apply to work with faculty on research projects. "
+        * 10
+    )
 
-    assert results == []
-    mock_extract.assert_called_once()
+    assert should_send_page_to_llm(page_text)
+
+
+def test_pre_filter_accepts_internship_pages():
+    page_text = (
+        "Our organization offers summer internships for university "
+        "students interested in software engineering. "
+        * 10
+    )
+
+    assert should_send_page_to_llm(page_text)
+
+
+def test_pre_filter_accepts_opportunity_directories():
+    page_text = (
+        "Browse our available student positions and employment "
+        "opportunities. Listings include research, internships, "
+        "and co-op programs. "
+        * 10
+    )
+
+    assert should_send_page_to_llm(page_text)
+
+
+def test_pre_filter_accepts_indicators_in_page_title():
+    page_text = (
+        "Explore available programs and learn more about the "
+        "application process for students. "
+        * 10
+    )
+
+    assert should_send_page_to_llm(
+        page_text,
+        page_title="Undergraduate Research Opportunities",
+    )

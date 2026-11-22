@@ -3,13 +3,11 @@
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
-from opportunity_intelligence.models import (
-    OpportunityCategory,
-    OpportunityType
-)
+from opportunity_intelligence.models import OpportunityCategory
+
 
 class OpportunityExtractionResult(BaseModel):
-    """Represent one opportunity extracted from a webpage."""
+    """Represent one actual opportunity extracted from a webpage."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -17,7 +15,7 @@ class OpportunityExtractionResult(BaseModel):
     organization: str | None = None
 
     category: OpportunityCategory | None = None
-    opportunity_type: OpportunityType = OpportunityType.UNKNOWN
+    opportunity_type: str = "Unknown"
 
     field: list[str] = Field(default_factory=list)
 
@@ -33,10 +31,11 @@ class OpportunityExtractionResult(BaseModel):
 
     start_date: str | None = None
     deadline: str | None = None
+
     start_date_text: str | None = None
     deadline_text: str | None = None
-    eligibility: str | None = None
 
+    eligibility: str | None = None
     application_url: HttpUrl | None = None
 
     evidence: list[str] = Field(default_factory=list)

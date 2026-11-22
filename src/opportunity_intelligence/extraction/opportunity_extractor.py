@@ -15,37 +15,28 @@ from opportunity_intelligence.extraction.quality_report import (
     build_quality_report
 )
 from opportunity_intelligence.models import Opportunity
+from opportunity_intelligence.storage.database import DEFAULT_DATABASE
+from opportunity_intelligence.storage.repository import (
+    save_opportunities as save_opportunities_to_database
+)
+from opportunity_intelligence.exporters.excel_exporter import (
+    export_to_excel
+)
 
 logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 INPUT_FILE = (
-    PROJECT_ROOT
-    / "data"
-    / "raw"
-    / "investigated_pages.json"
+    PROJECT_ROOT / "data" / "raw" / "investigated_pages.json"
 )
 
 OUTPUT_FILE = (
-    PROJECT_ROOT
-    / "data"
-    / "processed"
-    / "opportunities.json"
-)
-
-REVIEW_CANDIDATES_FILE = (
-    PROJECT_ROOT
-    / "data"
-    / "processed"
-    / "review_candidates.json"
+    PROJECT_ROOT / "data" / "processed" / "opportunities.json"
 )
 
 QUALITY_REPORT_FILE = (
-    PROJECT_ROOT
-    / "data"
-    / "processed"
-    / "quality_report.json"
+    PROJECT_ROOT / "data" / "processed" / "quality_report.json"
 )
 
 
@@ -53,7 +44,6 @@ def extract_opportunities(
     input_file: Path = INPUT_FILE,
     model: str | None = None,
     max_pages: int | None = None,
-    review_candidates_file: Path = REVIEW_CANDIDATES_FILE,
     quality_report_file: Path = QUALITY_REPORT_FILE
 ) -> list[Opportunity]:
     """Extract and deduplicate opportunities from investigated pages."""
@@ -67,11 +57,9 @@ def extract_opportunities(
         pages = pages[:max_pages]
 
     opportunities = []
-    review_candidates = []
 
     successful_pages = 0
     failed_pages = 0
-
     total_pages = len(pages)
 
     logger.info("Starting extraction of %d pages.", total_pages)
@@ -89,8 +77,7 @@ def extract_opportunities(
         try:
             page_opportunities = extract_opportunities_from_page(
                 page=page,
-                model=model,
-                review_candidates=review_candidates
+                model=model
             )
 
             opportunities.extend(page_opportunities)
@@ -98,7 +85,6 @@ def extract_opportunities(
 
         except Exception:
             failed_pages += 1
-
             logger.exception(
                 "Failed to extract opportunities from %s",
                 page_url
@@ -113,16 +99,6 @@ def extract_opportunities(
         quality_report_file
     )
 
-    logger.info(
-        "Opportunities needing review: %d",
-        quality_report["opportunities_needing_review"]
-    )
-
-    save_review_candidates(
-        review_candidates,
-        review_candidates_file
-    )
-
     logger.info("Extraction completed.")
     logger.info("Successfully processed pages: %d", successful_pages)
     logger.info("Failed pages: %d", failed_pages)
@@ -130,10 +106,6 @@ def extract_opportunities(
     logger.info(
         "Unique opportunities after deduplication: %d",
         len(unique_opportunities)
-    )
-    logger.info(
-        "Pages requiring manual review: %d",
-        len(review_candidates)
     )
 
     return unique_opportunities
@@ -153,23 +125,6 @@ def save_opportunities(
             opportunity.model_dump(mode="json")
             for opportunity in opportunities
         ]
-    }
-
-    with output_file.open("w", encoding="utf-8") as file:
-        json.dump(data, file, indent=4, ensure_ascii=False)
-
-
-def save_review_candidates(
-    review_candidates: list[dict],
-    output_file: Path = REVIEW_CANDIDATES_FILE
-) -> None:
-    """Save high-relevance pages that may need manual review."""
-
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-
-    data = {
-        "total_review_candidates": len(review_candidates),
-        "review_candidates": review_candidates
     }
 
     with output_file.open("w", encoding="utf-8") as file:
@@ -196,9 +151,25 @@ if __name__ == "__main__":
 
     opportunities = extract_opportunities()
 
+    # Preserve the JSON output for debugging and backup.
     save_opportunities(opportunities)
 
-    print(f"Opportunities extracted: {len(opportunities)}")
-    print(f"Results saved to: {OUTPUT_FILE}")
-    print(f"Review candidates saved to: {REVIEW_CANDIDATES_FILE}")
-    print(f"Quality report saved to: {QUALITY_REPORT_FILE}")
+    # Save or update the persistent SQLite records.
+    database_result = save_opportunities_to_database(
+        opportunities,
+        DEFAULT_DATABASE
+    )
+
+    # Generate the user-facing workbook from the database.
+    workbook_path = export_to_excel(
+        database_path=DEFAULT_DATABASE
+    )
+
+    print()
+    print("Extraction completed.")
+    print(f"New database records: {database_result['inserted']}")
+    print(f"Updated database records: {database_result['updated']}")
+    print(f"Total database records: {database_result['total_processed']}")
+    print(f"JSON backup: {OUTPUT_FILE}")
+    print(f"Excel workbook: {workbook_path}")
+    print(f"Database: {DEFAULT_DATABASE}")

@@ -12,55 +12,88 @@ from opportunity_intelligence.extraction.extraction_result import (
 )
 
 
+
+
 EXTRACTION_PROMPT = """
 You are an information extraction system.
 
-Identify all distinct employment, research, internship, co-op,
-fellowship, and similar opportunities described on the webpage.
+Your task is to identify actual, specific employment, research,
+internship, co-op, fellowship, and student program opportunities.
 
-PAGE CLASSIFICATION:
-- Set is_opportunity_page to true if the page describes at least
-  one actual opportunity or lists identifiable opportunities.
-- Otherwise, set it to false and return an empty opportunities list.
+QUALIFICATION RULES:
 
-EXTRACTION:
-- Extract each distinct opportunity separately.
-- For a single program or position, return one entry.
-- For directories, return one entry per identifiable listing.
+A qualifying opportunity must be a specific named
+program, position, fellowship, internship, co-op, or employment opportunity.
+
+DO NOT treat the following as opportunities:
+- General job-search websites or employment portals.
+- General internship or research directories.
+- Career pages that only link to other opportunities.
+- General application guides, FAQs, or instructions.
+- General descriptions of research or employment services.
+- News articles or informational resources.
+
+A directory may contain individual opportunities. Extract an
+individual listing only when the webpage provides enough information
+to identify that specific opportunity.
+
+If the page does not describe an actual specific opportunity:
+- Set is_opportunity_page to false.
+- Return an empty opportunities list.
+
+EXTRACTION RULES:
+
+- Extract each distinct qualifying opportunity separately.
+- Never create an opportunity from a general portal or directory.
 - Do not invent information or combine distinct opportunities.
-- Extract only information supported by the webpage.
-- Use null for missing optional values and empty lists for missing
-  list values.
+- Only extract details supported by the webpage.
+- Use null for missing optional values.
+- Use empty lists for missing list values.
+- Preserve original date wording.
 
 CATEGORIES (use exactly one):
 Research, Internship, Co-op, Fellowship,
 University Employment, Government, Other.
 
 OPPORTUNITY TYPES (use exactly one):
-Program, Individual Position, Opportunity Directory, Unknown.
+Program, Individual Position, Unknown.
 
 FIELDS:
-- title: opportunity name.
-- organization: offering or recruiting organization.
-- category and opportunity_type: classifications above.
-- field: relevant academic or technical subjects.
-- location and work_mode: stated location and work arrangement.
-- description: concise description.
-- requirements: mandatory qualifications.
-- preferred_skills: desirable qualifications.
-- compensation: stated pay or funding.
-- duration: stated length.
-- start_date and deadline: preserve dates as written.
-- eligibility: stated applicant eligibility.
-- application_url: application link, if provided.
-- evidence: short, exact excerpts supporting the extracted details.
 
-Do not confuse application deadlines with start dates.
-Do not apply details from one directory listing to another.
-Do not leave supported fields empty.
+- title: Exact opportunity or program name.
+- organization: Offering or recruiting organization.
+- category: Best-fitting category.
+- opportunity_type: Program, Individual Position, or Unknown.
+- field: Relevant academic or technical subjects.
+- location: Stated location.
+- work_mode: Stated work arrangement.
+- description: Concise description.
+- requirements: Mandatory qualifications.
+- preferred_skills: Desirable qualifications.
+- compensation: Stated pay or funding.
+- duration: Stated length.
+- start_date: Start date, preserved as written.
+- deadline: Application deadline, preserved as written.
+- start_date_text: Original start date wording.
+- deadline_text: Original deadline wording.
+- eligibility: Stated applicant eligibility.
+- application_url: Direct official application link, if available.
+- evidence: Short exact excerpts supporting extracted details.
+
+IMPORTANT:
+
+- Do not confuse application deadlines with start dates.
+- Do not use a general organization homepage as an application URL.
+- Do not use a directory URL as an application URL.
+- Do not invent an application URL.
+- Do not assume an opportunity is currently open.
+- Do not interpret missing information as evidence of eligibility.
 
 Return valid JSON matching the provided schema.
 """
+
+
+
 
 
 HIGH_RELEVANCE_RETRY_INSTRUCTIONS = """
@@ -133,6 +166,10 @@ def extract_page_with_llm(
     high_relevance_retry: bool = False
 ) -> PageExtractionResult:
     """Extract zero or more opportunities from one webpage."""
+
+    # Limit input size to prevent excessively slow LLM requests.
+    max_characters = 16000
+    page_text = page_text[:max_characters]
 
     if not page_text or not page_text.strip():
         raise ValueError("Page text cannot be empty.")

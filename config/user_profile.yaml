@@ -1,0 +1,33 @@
+education:
+  level: undergraduate
+  institution: University of Toronto
+  year_of_study: 1
+  program:
+    - Computer Science
+
+location:
+  country: Canada
+  preferred_regions:
+    - Canada
+    - United States
+
+interests:
+  - Computer Science
+  - Machine Learning
+  - Artificial Intelligence
+  - Mathematics
+  - Statistics
+  - Quantitative Finance
+  - Data Science
+
+experience:
+  research_experience: true
+  internship_experience: false
+
+work_preferences:
+  - Research
+  - Internship
+  - Co-op
+  - Fellowship
+  - University Employment
+  - Government

@@ -20,7 +20,7 @@ def test_generate_response():
     assert result == "This is a test response."
 
     mock_chat.assert_called_once_with(
-        model="qwen3:4b",
+        model="qwen3:8b",
         messages=[
             {
                 "role": "user",
@@ -57,7 +57,7 @@ def test_generate_response_with_json_schema():
     assert result == '{"is_opportunity": true}'
 
     mock_chat.assert_called_once_with(
-        model="qwen3:4b",
+        model="qwen3:8b",
         messages=[
             {
                 "role": "user",

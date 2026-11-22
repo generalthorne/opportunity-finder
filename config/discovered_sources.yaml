@@ -1,0 +1,150 @@
+sources:
+- id: undergrad_engineering_utoronto_ca_experiential_learning_research_opportunities
+  name: Undergraduate Research
+  url: https://undergrad.engineering.utoronto.ca/experiential-learning/research-opportunities
+  region: Canada
+  source_type: program
+  categories:
+  - research
+  enabled: true
+  notes: Automatically discovered source awaiting review.
+- id: uraf_tulane_edu_undergraduate_opportunities
+  name: Undergraduate Opportunities | Fellowship Advising
+  url: https://uraf.tulane.edu/undergraduate-opportunities
+  region: International
+  source_type: directory
+  categories:
+  - research
+  - internship
+  - fellowship
+  - government
+  enabled: true
+  notes: Automatically discovered source awaiting review.
+- id: www_canada_ca_en_services_jobs_youth_html
+  name: Youth and student employment - Canada.ca
+  url: https://www.canada.ca/en/services/jobs/youth.html
+  region: Canada
+  source_type: portal
+  categories:
+  - internship
+  - coop
+  - university_employment
+  - government
+  enabled: true
+  notes: Automatically discovered source awaiting review.
+- id: www_profellow_com_fellowships_28_fellowships_for_undergraduate_research
+  name: 18 Fellowships for Undergraduate Research | ProFellow
+  url: https://www.profellow.com/fellowships/28-fellowships-for-undergraduate-research
+  region: US
+  source_type: directory
+  categories:
+  - research
+  - fellowship
+  enabled: true
+  notes: Automatically discovered source awaiting review.
+- id: science_gc_ca_site_science_en_careers_science_jobs_open_students
+  name: Jobs Open to Students
+  url: https://science.gc.ca/site/science/en/careers-science/jobs-open-students
+  region: Canada
+  source_type: portal
+  categories:
+  - research
+  - coop
+  - university_employment
+  - government
+  enabled: true
+  notes: Automatically discovered source awaiting review.
+- id: eecs_berkeley_edu_academics_undergraduate_summer_research_other
+  name: Summer Research and Enrichment Programs at Other Universities - EECS at Berkeley
+  url: https://eecs.berkeley.edu/academics/undergraduate/summer-research/other
+  region: International
+  source_type: portal
+  categories:
+  - research
+  - internship
+  - government
+  enabled: true
+  notes: Automatically discovered source awaiting review.
+- id: www_pathwaystoscience_org_discipline_aspx
+  name: 'Computer Sciences: Directory of Internships, Research Opportunities, Scholarships
+    & Fellowships'
+  url: https://www.pathwaystoscience.org/Discipline.aspx?sort=TEC-ComputerSci_Computer+Sciences
+  region: International
+  source_type: directory
+  categories:
+  - research
+  - internship
+  - fellowship
+  enabled: true
+  notes: Automatically discovered source awaiting review.
+- id: www_ams_org_opportunities
+  name: 'AMS :: Mathematical Opportunities'
+  url: https://www.ams.org/opportunities
+  region: International
+  source_type: directory
+  categories:
+  - research
+  - internship
+  - fellowship
+  enabled: true
+  notes: Automatically discovered source awaiting review.
+- id: www_cur_org_resources_publications_student_resources_internship_and_research_opp
+  name: Internship and Research Opportunities - The Council on Undergraduate Research
+  url: https://www.cur.org/resources-publications/student-resources/internship-and-research-opportunities
+  region: International
+  source_type: directory
+  categories:
+  - research
+  - internship
+  enabled: true
+  notes: Automatically discovered source awaiting review.
+- id: studentjobs_iastate_edu_resources_employers_student_job_board
+  name: Student Job Board – Student Employment Center
+  url: https://studentjobs.iastate.edu/resources-employers/student-job-board
+  region: US
+  source_type: portal
+  categories:
+  - internship
+  - university_employment
+  enabled: true
+  notes: Automatically discovered source awaiting review.
+- id: www_osfa_illinois_edu_types_of_aid_employment_virtual_job_board
+  name: Virtual Job Board | Office of Student Financial Aid | Illinois
+  url: https://www.osfa.illinois.edu/types-of-aid/employment/virtual-job-board
+  region: US
+  source_type: portal
+  categories:
+  - university_employment
+  - government
+  enabled: true
+  notes: Automatically discovered source awaiting review.
+- id: math_charlotte_edu_research_and_internship_opportunities
+  name: Research and Internship Opportunities - Department of Mathematics and Statistics
+  url: https://math.charlotte.edu/research-and-internship-opportunities
+  region: International
+  source_type: directory
+  categories:
+  - research
+  - internship
+  enabled: true
+  notes: Automatically discovered source awaiting review.
+- id: www_simonsfoundation_org_careers_internship_opportunities
+  name: Internship Opportunities – Simons Foundation
+  url: https://www.simonsfoundation.org/careers/internship-opportunities
+  region: International
+  source_type: portal
+  categories:
+  - research
+  - internship
+  enabled: true
+  notes: Automatically discovered source awaiting review.
+- id: www_nsf_gov_funding_initiatives_reu
+  name: NSF Research Experiences for Undergraduates | NSF - U.S. National Science
+    Foundation
+  url: https://www.nsf.gov/funding/initiatives/reu
+  region: US
+  source_type: directory
+  categories:
+  - research
+  enabled: true
+  notes: Automatically discovered source awaiting review.

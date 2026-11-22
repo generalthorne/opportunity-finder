@@ -5,7 +5,7 @@ from unittest.mock import patch
 from opportunity_intelligence.extraction.opportunity_extractor import (
     extract_opportunities,
     save_opportunities,
-    save_review_candidates
+    save_quality_report
 )
 
 from opportunity_intelligence.models import (
@@ -16,7 +16,6 @@ from opportunity_intelligence.models import (
 
 def test_extract_opportunities_saves_quality_report(tmp_path):
     input_file = tmp_path / "investigated_pages.json"
-    review_file = tmp_path / "review_candidates.json"
     quality_file = tmp_path / "quality_report.json"
 
     input_file.write_text(
@@ -26,7 +25,6 @@ def test_extract_opportunities_saves_quality_report(tmp_path):
 
     extract_opportunities(
         input_file=input_file,
-        review_candidates_file=review_file,
         quality_report_file=quality_file
     )
 
@@ -44,7 +42,6 @@ def test_extract_opportunities_quality_report_contains_missing_fields(
     tmp_path
 ):
     input_file = tmp_path / "investigated_pages.json"
-    review_file = tmp_path / "review_candidates.json"
     quality_file = tmp_path / "quality_report.json"
 
     input_file.write_text(
@@ -74,7 +71,6 @@ def test_extract_opportunities_quality_report_contains_missing_fields(
     ):
         extract_opportunities(
             input_file=input_file,
-            review_candidates_file=review_file,
             quality_report_file=quality_file
         )
 
@@ -96,7 +92,6 @@ def test_extract_opportunities_handles_empty_pages_file(tmp_path):
 
     results = extract_opportunities(
         input_file=input_file,
-        review_candidates_file=tmp_path / "review_candidates.json",
         quality_report_file=tmp_path / "quality_report.json"
     )
 
@@ -121,7 +116,6 @@ def test_extract_opportunities_handles_failed_pages(tmp_path):
 
     results = extract_opportunities(
         input_file=input_file,
-        review_candidates_file=tmp_path / "review_candidates.json",
         quality_report_file=tmp_path / "quality_report.json"
     )
 
@@ -146,7 +140,6 @@ def test_extract_opportunities_handles_empty_page_text(tmp_path):
 
     results = extract_opportunities(
         input_file=input_file,
-        review_candidates_file=tmp_path / "review_candidates.json",
         quality_report_file=tmp_path / "quality_report.json"
     )
 
@@ -209,7 +202,6 @@ def test_extract_opportunities_processes_successful_pages(tmp_path):
 
         results = extract_opportunities(
             input_file=input_file,
-            review_candidates_file=tmp_path / "review_candidates.json",
             quality_report_file=tmp_path / "quality_report.json"
         )
 
@@ -261,7 +253,6 @@ def test_extract_opportunities_processes_multiple_pages(tmp_path):
 
         results = extract_opportunities(
             input_file=input_file,
-            review_candidates_file=tmp_path / "review_candidates.json",
             quality_report_file=tmp_path / "quality_report.json"
         )
 
@@ -294,7 +285,6 @@ def test_extract_opportunities_passes_model_to_page_extractor(tmp_path):
         extract_opportunities(
             input_file=input_file,
             model="qwen3:4b",
-            review_candidates_file=tmp_path / "review_candidates.json",
             quality_report_file=tmp_path / "quality_report.json"
         )
 
@@ -331,7 +321,6 @@ def test_extract_opportunities_continues_after_page_failure(tmp_path):
     ):
         results = extract_opportunities(
             input_file=input_file,
-            review_candidates_file=tmp_path / "review_candidates.json",
             quality_report_file=tmp_path / "quality_report.json"
         )
 
@@ -362,62 +351,11 @@ def test_extract_opportunities_respects_max_pages(tmp_path):
         results = extract_opportunities(
             input_file=input_file,
             max_pages=2,
-            review_candidates_file=tmp_path / "review_candidates.json",
             quality_report_file=tmp_path / "quality_report.json"
         )
 
     assert results == []
     assert mock_extract.call_count == 2
-
-
-def test_extract_opportunities_saves_review_candidates(tmp_path):
-    input_file = tmp_path / "investigated_pages.json"
-    review_file = tmp_path / "review_candidates.json"
-
-    pages = {
-        "pages": [
-            {
-                "status": "success",
-                "url": "https://example.com/research",
-                "page_text": "Research opportunity."
-            }
-        ]
-    }
-
-    with input_file.open("w", encoding="utf-8") as file:
-        json.dump(pages, file)
-
-    with patch(
-        "opportunity_intelligence.extraction.opportunity_extractor."
-        "extract_opportunities_from_page",
-        return_value=[]
-    ):
-        results = extract_opportunities(
-            input_file=input_file,
-            review_candidates_file=review_file,
-            quality_report_file=tmp_path / "quality_report.json"
-        )
-
-    assert results == []
-    assert review_file.exists()
-
-    with review_file.open("r", encoding="utf-8") as file:
-        data = json.load(file)
-
-    assert data["total_review_candidates"] == 0
-    assert data["review_candidates"] == []
-
-
-def test_extract_opportunities_saves_empty_review_file(tmp_path):
-    review_file = tmp_path / "review_candidates.json"
-
-    save_review_candidates([], review_file)
-
-    with review_file.open("r", encoding="utf-8") as file:
-        data = json.load(file)
-
-    assert data["total_review_candidates"] == 0
-    assert data["review_candidates"] == []
 
 
 def test_extract_opportunities_processes_multiple_opportunities_from_one_page(
@@ -468,7 +406,6 @@ def test_extract_opportunities_processes_multiple_opportunities_from_one_page(
     ):
         results = extract_opportunities(
             input_file=input_file,
-            review_candidates_file=tmp_path / "review_candidates.json",
             quality_report_file=tmp_path / "quality_report.json"
         )
 

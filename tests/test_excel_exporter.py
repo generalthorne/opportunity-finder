@@ -72,8 +72,10 @@ def test_build_workbook_creates_both_sheets(
     )
 
     assert workbook.sheetnames == [
+        "Ranked Opportunities",
         "Opportunities",
-        "Review Queue"
+        "Review Queue",
+        "Source Information"
     ]
 
 
@@ -149,6 +151,8 @@ def test_export_to_excel_creates_file(
 
     workbook = load_workbook(output_file)
     assert workbook.sheetnames == [
+        "Ranked Opportunities",
         "Opportunities",
-        "Review Queue"
+        "Review Queue",
+        "Source Information"
     ]

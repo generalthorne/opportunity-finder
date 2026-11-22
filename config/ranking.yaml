@@ -1,0 +1,30 @@
+
+weights:
+  relevance: 30
+  eligibility: 25
+  quality: 20
+  deadline: 15
+  category_preference: 10
+
+category_preferences:
+  Research: 9
+  Internship: 10
+  Co-op: 10
+  Fellowship: 9
+  University Employment: 8
+  Government: 8
+  Other: 5
+
+
+
+relevance_keywords:
+  computer science: 5
+  machine learning: 5
+  artificial intelligence: 5
+  quantitative finance: 5
+  data science: 4
+  software engineering: 4
+  statistics: 4
+  mathematics: 3
+  finance: 3
+  research: 2

@@ -4,7 +4,7 @@
 import ollama
 
 
-DEFAULT_MODEL = "qwen3:4b"
+DEFAULT_MODEL = "qwen3:8b"
 
 
 def generate_response(
