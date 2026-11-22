@@ -2,134 +2,166 @@
 """Extract structured opportunity information using a local LLM."""
 
 import json
+import math
+import re
+from urllib.parse import urlsplit
 
 from opportunity_intelligence.extraction.ollama_client import (
     generate_response
 )
-
 from opportunity_intelligence.extraction.extraction_result import (
     PageExtractionResult
 )
 
 
+DEFAULT_MODEL = "gemma4:12b"
+MAX_PAGE_CHARACTERS = 16000
 
 
 EXTRACTION_PROMPT = """
-You are an information extraction system.
+You are a precise information extraction system.
 
-Your task is to identify actual, specific employment, research,
-internship, co-op, fellowship, and student program opportunities.
+Your task is to identify and extract actual employment, research,
+internship, co-op, fellowship, and student program opportunities
+from webpage content.
 
-QUALIFICATION RULES:
+IMPORTANT: Follow the supplied JSON schema exactly.
 
-A qualifying opportunity must be a specific named
-program, position, fellowship, internship, co-op, or employment opportunity.
+QUALIFICATION:
 
-DO NOT treat the following as opportunities:
-- General job-search websites or employment portals.
-- General internship or research directories.
-- Career pages that only link to other opportunities.
-- General application guides, FAQs, or instructions.
-- General descriptions of research or employment services.
-- News articles or informational resources.
+A webpage qualifies if it describes at least one identifiable,
+specific opportunity.
 
-A directory may contain individual opportunities. Extract an
-individual listing only when the webpage provides enough information
-to identify that specific opportunity.
+Qualifying examples:
+- Named research programs and internships.
+- Specific research assistant or employment positions.
+- Named fellowships and student employment programs.
+- Specific co-op and internship positions.
 
-If the page does not describe an actual specific opportunity:
+Non-qualifying examples:
+- General job boards and employment portals.
+- Directories that only link to other opportunities.
+- Career pages without specific listings.
+- Application guides, FAQs, and informational articles.
+- General descriptions of an organization's research activities.
+
+If the webpage does not describe a specific opportunity:
 - Set is_opportunity_page to false.
 - Return an empty opportunities list.
 
+If the webpage describes one or more specific opportunities:
+- Set is_opportunity_page to true.
+- Extract each distinct opportunity separately.
+
+CONSISTENCY:
+
+- is_opportunity_page must be true if opportunities is non-empty.
+- is_opportunity_page must be false if opportunities is empty.
+- Never return false alongside a non-empty opportunities list.
+
 EXTRACTION RULES:
 
-- Extract each distinct qualifying opportunity separately.
-- Never create an opportunity from a general portal or directory.
-- Do not invent information or combine distinct opportunities.
-- Only extract details supported by the webpage.
-- Use null for missing optional values.
-- Use empty lists for missing list values.
-- Preserve original date wording.
-
-CATEGORIES (use exactly one):
-Research, Internship, Co-op, Fellowship,
-University Employment, Government, Other.
-
-OPPORTUNITY TYPES (use exactly one):
-Program, Individual Position, Unknown.
-
-FIELDS:
-
-- title: Exact opportunity or program name.
-- organization: Offering or recruiting organization.
-- category: Best-fitting category.
-- opportunity_type: Program, Individual Position, or Unknown.
-- field: Relevant academic or technical subjects.
-- location: Stated location.
-- work_mode: Stated work arrangement.
-- description: Concise description.
-- requirements: Mandatory qualifications.
-- preferred_skills: Desirable qualifications.
-- compensation: Stated pay or funding.
-- duration: Stated length.
-- start_date: Start date, preserved as written.
-- deadline: Application deadline, preserved as written.
-- start_date_text: Original start date wording.
-- deadline_text: Original deadline wording.
-- eligibility: Stated applicant eligibility.
-- application_url: Direct official application link, if available.
-- evidence: Short exact excerpts supporting extracted details.
-
-IMPORTANT:
-
+- Only extract information explicitly supported by the webpage.
+- Never invent information or fill gaps using assumptions.
+- Extract multiple distinct opportunities separately.
+- Do not duplicate the same opportunity.
+- Use null for missing optional string fields.
+- Use empty lists for missing list fields.
+- Preserve the original wording of dates and deadlines.
 - Do not confuse application deadlines with start dates.
-- Do not use a general organization homepage as an application URL.
-- Do not use a directory URL as an application URL.
-- Do not invent an application URL.
-- Do not assume an opportunity is currently open.
+- Do not assume an opportunity is currently accepting applications.
 - Do not interpret missing information as evidence of eligibility.
+- Distinguish required qualifications from preferred qualifications.
+- Keep descriptions concise but informative.
+- Include evidence supporting the extracted opportunity.
 
-Return valid JSON matching the provided schema.
-"""
+APPLICATION URL RULES:
 
+- application_url must be a complete HTTP or HTTPS URL.
+- Only use an actual URL found in the webpage content.
+- Never use button labels or link text as a URL.
+- Never return values such as "Apply online", "Click here",
+  or "Application portal" as URLs.
+- Do not invent URLs.
+- If the actual application URL cannot be identified, return null.
+- Do not substitute a general homepage or directory URL.
 
+CATEGORIES:
 
+Use exactly one of:
+- Research
+- Internship
+- Co-op
+- Fellowship
+- University Employment
+- Government
+- Other
 
+OPPORTUNITY TYPES:
 
-HIGH_RELEVANCE_RETRY_INSTRUCTIONS = """
-IMPORTANT: REASSESS THE PAGE CLASSIFICATION.
+Use exactly one of:
+- Program
+- Individual Position
+- Unknown
 
-This webpage was independently identified as highly relevant by
-a separate link-analysis stage. Your initial classification may
-have been too restrictive.
+FIELD INSTRUCTIONS:
 
-Check carefully for:
-- Named research programs, internships, co-op programs, fellowships,
-  student employment positions, and similar opportunities.
-- Opportunities restricted to a particular university, faculty,
-  department, academic year, or student group.
-- Programs that are described on informational or application pages.
-- Individual opportunities listed within a directory.
+- title: Official opportunity or position name.
+- organization: Organization offering the opportunity.
+- category: One of the specified categories, or null.
+- opportunity_type: Program, Individual Position, or Unknown.
+- field: Relevant academic or professional fields.
+- location: Geographic location, if stated.
+- work_mode: Remote, hybrid, on-site, or another stated arrangement.
+- description: Concise description of the opportunity.
+- requirements: Explicitly stated required qualifications.
+- preferred_skills: Explicitly stated preferred qualifications or skills.
+- compensation: Stated salary, stipend, or other compensation.
+- duration: Stated length of the opportunity.
+- start_date: Normalized start date, if determinable.
+- deadline: Normalized application deadline, if determinable.
+- start_date_text: Original wording of the start date.
+- deadline_text: Original wording of the deadline.
+- eligibility: Explicitly stated eligibility information.
+- application_url: Actual official application URL, or null.
+- evidence: Short excerpts or specific facts supporting extraction.
 
-Eligibility restrictions do NOT mean that something is not an
-opportunity. Do not reject a program merely because it is limited
-to a specific group of students.
+DATE HANDLING:
 
-If the page identifies or describes an actual opportunity, set
-is_opportunity_page to true and extract the supported details.
+- Preserve original date wording in start_date_text and deadline_text.
+- Only populate normalized dates when the date is sufficiently clear.
+- Never guess a year or convert an ambiguous date into a specific date.
+- Do not put an application deadline in start_date.
 
-However, do not invent opportunities. If the page contains only
-general information and does not identify or describe an actual
-opportunity, set is_opportunity_page to false.
+OUTPUT REQUIREMENTS:
 
-Return valid JSON matching the provided schema.
+- Return exactly one JSON object.
+- Do not include Markdown code fences.
+- Do not include introductory or concluding text.
+- Follow the supplied JSON schema exactly.
+- Do not add, rename, or omit schema fields.
+- confidence must be a numeric value between 0 and 1.
+- Use JSON null for missing optional values.
+- Use empty JSON arrays for missing list values.
 """
 
 
 def normalize_extraction_data(data: dict) -> dict:
-    """Normalize common missing-value representations from the LLM."""
+    """Normalize common invalid or missing LLM output values."""
 
-    missing_values = {"", "n/a", "na", "none", "null", "unknown"}
+    if not isinstance(data, dict):
+        raise ValueError("LLM output must be a JSON object.")
+
+    missing_values = {
+        "",
+        "n/a",
+        "na",
+        "none",
+        "null",
+        "unknown",
+        "not specified",
+        "not available"
+    }
 
     nullable_fields = {
         "title",
@@ -142,11 +174,45 @@ def normalize_extraction_data(data: dict) -> dict:
         "duration",
         "start_date",
         "deadline",
+        "start_date_text",
+        "deadline_text",
         "eligibility",
         "application_url"
     }
 
-    for opportunity in data.get("opportunities", []):
+    list_fields = {
+        "field",
+        "requirements",
+        "preferred_skills",
+        "evidence"
+    }
+
+    # Normalize page-level confidence to the valid range [0, 1].
+    confidence = data.get("confidence")
+
+    try:
+        if isinstance(confidence, bool):
+            raise ValueError("Boolean confidence is invalid.")
+
+        confidence = float(confidence)
+
+        if not math.isfinite(confidence):
+            confidence = 0.0
+
+    except (TypeError, ValueError):
+        confidence = 0.0
+
+    data["confidence"] = max(0.0, min(1.0, confidence))
+
+    opportunities = data.get("opportunities", [])
+
+    if not isinstance(opportunities, list):
+        raise ValueError("The opportunities field must be a list.")
+
+    for opportunity in opportunities:
+        if not isinstance(opportunity, dict):
+            raise ValueError("Each opportunity must be a JSON object.")
+
         for key in nullable_fields:
             value = opportunity.get(key)
 
@@ -156,57 +222,103 @@ def normalize_extraction_data(data: dict) -> dict:
             ):
                 opportunity[key] = None
 
+        for key in list_fields:
+            value = opportunity.get(key)
+
+            if value is None:
+                opportunity[key] = []
+
+            elif isinstance(value, str):
+                opportunity[key] = [value] if value.strip() else []
+
+        application_url = opportunity.get("application_url")
+
+        if isinstance(application_url, str):
+            try:
+                parsed_url = urlsplit(application_url)
+
+                if (
+                    parsed_url.scheme not in {"http", "https"}
+                    or not parsed_url.netloc
+                ):
+                    opportunity["application_url"] = None
+
+            except ValueError:
+                opportunity["application_url"] = None
+
+    # Keep page classification consistent with extracted opportunities.
+    data["is_opportunity_page"] = bool(opportunities)
+
     return data
 
 
-def extract_page_with_llm(
-    page_text: str,
-    page_title: str | None = None,
-    model: str | None = None,
-    high_relevance_retry: bool = False
-) -> PageExtractionResult:
-    """Extract zero or more opportunities from one webpage."""
+def parse_llm_json(response_text: str) -> dict:
+    """Parse JSON returned by the LLM."""
 
-    # Limit input size to prevent excessively slow LLM requests.
-    max_characters = 16000
-    page_text = page_text[:max_characters]
+    if not response_text or not response_text.strip():
+        raise ValueError("The LLM returned an empty response.")
 
-    if not page_text or not page_text.strip():
-        raise ValueError("Page text cannot be empty.")
+    response_text = response_text.strip()
 
-    retry_instructions = (
-        HIGH_RELEVANCE_RETRY_INSTRUCTIONS
-        if high_relevance_retry
-        else ""
+    # Remove Markdown code fences if the model ignores the prompt.
+    response_text = re.sub(
+        r"^```(?:json)?\s*",
+        "",
+        response_text,
+        flags=re.IGNORECASE
     )
 
-    prompt = f"""
-{EXTRACTION_PROMPT}
-
-{retry_instructions}
-
-Webpage title:
-{page_title or "Unknown"}
-
-Webpage content:
-{page_text}
-"""
-
-    response_format = PageExtractionResult.model_json_schema()
-
-    response_text = generate_response(
-        prompt=prompt,
-        model=model or "qwen3:4b",
-        response_format=response_format
+    response_text = re.sub(
+        r"\s*```$",
+        "",
+        response_text
     )
 
     try:
-        response_data = json.loads(response_text)
+        return json.loads(response_text)
+
     except json.JSONDecodeError as error:
         raise ValueError(
             "The LLM returned invalid JSON."
         ) from error
 
+
+def extract_page_with_llm(
+    page_text: str,
+    page_title: str | None = None,
+    model: str | None = None
+) -> PageExtractionResult:
+    """Extract zero or more opportunities from one webpage."""
+
+    if not page_text or not page_text.strip():
+        raise ValueError("Page text cannot be empty.")
+
+    page_text = page_text[:MAX_PAGE_CHARACTERS]
+
+    prompt = f"""
+{EXTRACTION_PROMPT}
+
+WEBPAGE TITLE:
+{page_title or "Unknown"}
+
+WEBPAGE CONTENT:
+{page_text}
+"""
+
+    response_format = PageExtractionResult.model_json_schema()
+    effective_model = model or DEFAULT_MODEL
+
+    response_text = generate_response(
+        prompt=prompt,
+        model=effective_model,
+        response_format=response_format
+    )
+
+    print("\n--- RAW LLM RESPONSE ---")
+    print(repr(response_text))
+    print("--- END RAW RESPONSE ---\n")
+
+    response_data = parse_llm_json(response_text)
     response_data = normalize_extraction_data(response_data)
 
     return PageExtractionResult.model_validate(response_data)

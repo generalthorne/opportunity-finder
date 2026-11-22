@@ -16,7 +16,7 @@ def test_fetch_page_returns_html(monkeypatch):
             <body><h1>Example</h1></body>
         </html>
         """
-
+        headers = {}
         def raise_for_status(self):
             pass
 
@@ -40,6 +40,7 @@ def test_fetch_page_handles_http_error(monkeypatch):
 
     class MockResponse:
         status_code = 403
+        headers = {}
 
         def raise_for_status(self):
             raise requests.HTTPError(

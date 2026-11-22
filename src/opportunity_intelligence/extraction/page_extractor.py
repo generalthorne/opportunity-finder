@@ -7,11 +7,17 @@ from datetime import date, datetime
 
 from pydantic import ValidationError
 
+from opportunity_intelligence.extraction.extraction_cache import (
+    ExtractionCache,
+    calculate_content_hash,
+)
 from opportunity_intelligence.extraction.llm_extractor import (
+    DEFAULT_MODEL,
     extract_page_with_llm,
 )
 from opportunity_intelligence.extraction.text_preprocessor import (
     clean_page_text,
+    prepare_page_text,
 )
 from opportunity_intelligence.models import (
     Opportunity,
@@ -22,14 +28,9 @@ from opportunity_intelligence.models import (
 logger = logging.getLogger(__name__)
 
 
-
-# Pages shorter than this are unlikely to contain enough information
-# for meaningful opportunity extraction.
 MINIMUM_PAGE_TEXT_LENGTH = 250
 
 
-# These page titles usually indicate informational or administrative
-# pages rather than actual opportunity listings.
 EXCLUDED_PAGE_TITLE_TERMS = (
     "privacy policy",
     "terms of use",
@@ -47,11 +48,6 @@ EXCLUDED_PAGE_TITLE_TERMS = (
 )
 
 
-# These terms suggest that a page may contain an opportunity,
-# employment listing, research position, or student program.
-#
-# The list is intentionally broad. The LLM performs the more
-# detailed qualification and extraction.
 OPPORTUNITY_INDICATORS = (
     "research opportunity",
     "research assistant",
@@ -86,27 +82,23 @@ OPPORTUNITY_INDICATORS = (
 )
 
 
+DATE_FORMATS = [
+    "%B %d, %Y",
+    "%b %d, %Y",
+    "%d %B %Y",
+    "%d %b %Y",
+    "%Y-%m-%d",
+    "%m/%d/%Y",
+    "%d/%m/%Y",
+]
+
+
 def should_send_page_to_llm(
     page_text: str,
     page_title: str | None = None,
 ) -> bool:
-    """
-    Decide whether a webpage is worth sending to the LLM.
+    """Decide whether a webpage is worth sending to the LLM."""
 
-    This is a preliminary filter, not an opportunity classifier.
-
-    A page is rejected when:
-    1. Its text is missing or shorter than the minimum length.
-    2. Its title clearly identifies it as an administrative page.
-    3. Its title and text contain no recognizable opportunity-related
-       indicators.
-
-    A page that passes this function is NOT guaranteed to contain
-    an actual opportunity. It is simply considered worth examining
-    with the LLM.
-
-    The function does not modify the page text or make network requests.
-    """
     if not isinstance(page_text, str):
         return False
 
@@ -131,17 +123,6 @@ def should_send_page_to_llm(
     return True
 
 
-DATE_FORMATS = [
-    "%B %d, %Y",
-    "%b %d, %Y",
-    "%d %B %Y",
-    "%d %b %Y",
-    "%Y-%m-%d",
-    "%m/%d/%Y",
-    "%d/%m/%Y",
-]
-
-
 def parse_date(value: str | None, is_deadline: bool = False) -> date | None:
     """Parse supported date formats."""
 
@@ -156,7 +137,6 @@ def parse_date(value: str | None, is_deadline: bool = False) -> date | None:
         except ValueError:
             continue
 
-    # Interpret month-only dates conservatively.
     for date_format in ("%B %Y", "%b %Y"):
         try:
             parsed = datetime.strptime(value, date_format).date()
@@ -164,7 +144,7 @@ def parse_date(value: str | None, is_deadline: bool = False) -> date | None:
             if is_deadline:
                 last_day = calendar.monthrange(
                     parsed.year,
-                    parsed.month
+                    parsed.month,
                 )[1]
                 return date(parsed.year, parsed.month, last_day)
 
@@ -250,14 +230,13 @@ def determine_status(deadline: date | None) -> OpportunityStatus:
 
 def convert_extraction_to_opportunities(
     extraction_result,
-    source_url: str
+    source_url: str,
 ) -> list[Opportunity]:
     """Convert extracted records into validated Opportunity models."""
 
     opportunities = []
 
     for extracted in extraction_result.opportunities:
-
         if not is_qualified_opportunity(extracted):
             continue
 
@@ -311,7 +290,7 @@ def convert_extraction_to_opportunities(
             logger.warning(
                 "Skipping invalid opportunity '%s': %s",
                 extracted.title,
-                error
+                error,
             )
 
     return opportunities
@@ -320,6 +299,7 @@ def convert_extraction_to_opportunities(
 def extract_opportunities_from_page(
     page: dict,
     model: str | None = None,
+    cache: ExtractionCache | None = None,
 ) -> list[Opportunity]:
     """Extract zero or more opportunities from one investigated page."""
 
@@ -333,15 +313,18 @@ def extract_opportunities_from_page(
 
     source_url = page.get("url")
 
-    if not source_url:
-        logger.warning("Skipping page without a source URL.")
+    if not isinstance(source_url, str) or not source_url.strip():
+        logger.warning("Skipping page without a valid source URL.")
         return []
 
+    page_title = page.get("page_title")
+
+    # Clean the full page before preliminary screening.
     cleaned_text = clean_page_text(page_text)
 
     if not should_send_page_to_llm(
         page_text=cleaned_text,
-        page_title=page.get("page_title"),
+        page_title=page_title,
     ):
         logger.info(
             "Skipping LLM extraction: page did not pass preliminary "
@@ -350,18 +333,67 @@ def extract_opportunities_from_page(
         )
         return []
 
+    # Prioritize relevant sections and enforce the LLM input limit.
+    llm_text = prepare_page_text(cleaned_text)
 
-
-    extraction_result = extract_page_with_llm(
-        page_text=cleaned_text,
-        page_title=page.get("page_title"),
-        model=model
+    logger.info(
+        "Prepared LLM input: %d characters (reduced from %d). URL: %s",
+        len(llm_text),
+        len(cleaned_text),
+        source_url,
     )
+
+    if not llm_text.strip():
+        return []
+
+    effective_model = model or DEFAULT_MODEL
+
+    # Cache the exact text that will be sent to the LLM.
+    content_hash = calculate_content_hash(
+        page_text=llm_text,
+        page_title=page_title,
+    )
+
+    extraction_result = None
+
+    if cache is not None:
+        extraction_result = cache.get(
+            url=source_url,
+            content_hash=content_hash,
+            model=effective_model,
+        )
+
+        if extraction_result is not None:
+            logger.info(
+                "Using cached extraction result. URL: %s",
+                source_url,
+            )
+
+    if extraction_result is None:
+        logger.info(
+            "Running LLM extraction. Model: %s. URL: %s",
+            effective_model,
+            source_url,
+        )
+
+        extraction_result = extract_page_with_llm(
+            page_text=llm_text,
+            page_title=page_title,
+            model=effective_model,
+        )
+
+        if cache is not None:
+            cache.set(
+                url=source_url,
+                content_hash=content_hash,
+                model=effective_model,
+                result=extraction_result,
+            )
 
     if not extraction_result.is_opportunity_page:
         return []
 
     return convert_extraction_to_opportunities(
         extraction_result=extraction_result,
-        source_url=source_url
+        source_url=source_url,
     )

@@ -148,3 +148,32 @@ sources:
   - research
   enabled: true
   notes: Automatically discovered source awaiting review.
+- id: www_interstride_com_students
+  name: Find International-Friendly Jobs and Internships Worldwide |
+  url: https://www.interstride.com/students
+  region: International
+  source_type: portal
+  categories:
+  - internship
+  enabled: true
+  notes: Automatically discovered source awaiting review.
+- id: www_standoutsearch_com
+  name: 'StandOut Search • The #1 Database for High School Internships'
+  url: https://www.standoutsearch.com/
+  region: International
+  source_type: directory
+  categories:
+  - research
+  - internship
+  enabled: true
+  notes: Automatically discovered source awaiting review.
+- id: www_internships_com
+  name: Internships.com — automate your internship search across 46,950+ available
+    listings
+  url: https://www.internships.com/
+  region: International
+  source_type: portal
+  categories:
+  - internship
+  enabled: true
+  notes: Automatically discovered source awaiting review.

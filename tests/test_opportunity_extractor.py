@@ -13,6 +13,12 @@ from opportunity_intelligence.models import (
     OpportunityCategory
 )
 
+from opportunity_intelligence.extraction.opportunity_extractor import (
+    deduplicate_pages,
+    normalize_page_url,
+)
+
+
 
 def test_extract_opportunities_saves_quality_report(tmp_path):
     input_file = tmp_path / "investigated_pages.json"
@@ -284,11 +290,11 @@ def test_extract_opportunities_passes_model_to_page_extractor(tmp_path):
 
         extract_opportunities(
             input_file=input_file,
-            model="qwen3:4b",
+            model="qwen3:8b",
             quality_report_file=tmp_path / "quality_report.json"
         )
 
-    assert mock_extract.call_args.kwargs["model"] == "qwen3:4b"
+    assert mock_extract.call_args.kwargs["model"] == "qwen3:8b"
 
 
 def test_extract_opportunities_continues_after_page_failure(tmp_path):
@@ -418,3 +424,90 @@ def test_extract_opportunities_processes_multiple_opportunities_from_one_page(
 
     assert data["total_opportunities"] == 3
     assert len(data["opportunities"]) == 3
+
+
+def test_normalize_page_url_removes_fragments_and_trailing_slashes():
+    assert normalize_page_url(
+        "https://example.com/research/#section"
+    ) == "https://example.com/research"
+
+    assert normalize_page_url(
+        "https://example.com/research/"
+    ) == "https://example.com/research"
+
+
+def test_deduplicate_pages_removes_duplicate_urls():
+    pages = [
+        {
+            "url": "https://example.com/research",
+            "status": "success",
+            "page_text": "Research opportunity information."
+        },
+        {
+            "url": "https://example.com/research/#section",
+            "status": "success",
+            "page_text": "Duplicate page."
+        },
+        {
+            "url": "https://example.com/internships",
+            "status": "success",
+            "page_text": "Internship information."
+        }
+    ]
+
+    results = deduplicate_pages(pages)
+
+    assert len(results) == 2
+    assert results[0]["url"] == "https://example.com/research"
+    assert results[1]["url"] == "https://example.com/internships"
+
+
+def test_deduplicate_pages_keeps_most_complete_successful_page():
+    pages = [
+        {
+            "url": "https://example.com/research",
+            "status": "success",
+            "page_text": "Short text."
+        },
+        {
+            "url": "https://example.com/research/",
+            "status": "success",
+            "page_text": "Much more complete research opportunity information."
+        }
+    ]
+
+    results = deduplicate_pages(pages)
+
+    assert len(results) == 1
+    assert results[0]["page_text"].startswith("Much more complete")
+
+
+def test_deduplicate_pages_prefers_successful_page():
+    pages = [
+        {
+            "url": "https://example.com/research",
+            "status": "failed",
+            "page_text": None
+        },
+        {
+            "url": "https://example.com/research/",
+            "status": "success",
+            "page_text": "Research opportunity information."
+        }
+    ]
+
+    results = deduplicate_pages(pages)
+
+    assert len(results) == 1
+    assert results[0]["status"] == "success"
+
+
+def test_deduplicate_pages_keeps_pages_without_urls():
+    pages = [
+        {"status": "success", "page_text": "Page one."},
+        {"status": "success", "page_text": "Page two."}
+    ]
+
+    results = deduplicate_pages(pages)
+
+    assert len(results) == 2

@@ -1,0 +1,10 @@
+Process the next 5 pages:
+python -m opportunity_intelligence.run --skip-discovery --max-pages 5
+
+
+Process the next 10 pages:
+python -m opportunity_intelligence.run --skip-discovery --max-pages 10
+
+
+Rebuild the source links when you actually want a fresh collection:
+python -m opportunity_intelligence.run --skip-discovery --refresh-links --max-pages 5

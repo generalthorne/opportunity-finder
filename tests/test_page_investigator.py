@@ -54,6 +54,7 @@ def test_investigate_page_success(monkeypatch):
     assert result["page_title"] == "Summer Research Program"
     assert "Applications are now open." in result["page_text"]
     assert result["relevance_score"] == 8
+    assert result["cache_status"] == "downloaded"
 
 
 def test_investigate_page_failure(monkeypatch):
@@ -85,6 +86,7 @@ def test_investigate_page_failure(monkeypatch):
     assert result["error"] == "403 Client Error: Forbidden"
     assert result["page_title"] is None
     assert result["page_text"] is None
+    assert result["cache_status"] == "not_cached"
 
 
 def test_investigate_pages(tmp_path, monkeypatch):
@@ -104,12 +106,13 @@ def test_investigate_pages(tmp_path, monkeypatch):
         encoding="utf-8"
     )
 
-    def mock_investigate_page(link):
+    def mock_investigate_page(link, cache=None):
         return {
             "url": link["url"],
             "status": "success",
             "page_title": "Test Page",
-            "page_text": "Test content"
+            "page_text": "Test content",
+            "cache_status": "downloaded"
         }
 
     monkeypatch.setattr(
@@ -125,6 +128,8 @@ def test_investigate_pages(tmp_path, monkeypatch):
     assert len(results) == 2
     assert results[0]["status"] == "success"
     assert results[1]["status"] == "success"
+    assert results[0]["cache_status"] == "downloaded"
+    assert results[1]["cache_status"] == "downloaded"
 
 
 def test_save_investigation_results(tmp_path):
@@ -137,13 +142,15 @@ def test_save_investigation_results(tmp_path):
             "url": "https://example.com/one",
             "status": "success",
             "page_title": "Test Page",
-            "page_text": "Test content"
+            "page_text": "Test content",
+            "cache_status": "downloaded"
         },
         {
             "url": "https://example.com/two",
             "status": "failed",
             "page_title": None,
-            "page_text": None
+            "page_text": None,
+            "cache_status": "not_cached"
         }
     ]
 

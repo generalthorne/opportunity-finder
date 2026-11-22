@@ -1,10 +1,9 @@
-
 """Client for communicating with a local Ollama model."""
 
 import ollama
 
 
-DEFAULT_MODEL = "qwen3:8b"
+DEFAULT_MODEL = "gemma4:12b"
 
 
 def generate_response(
